@@ -13,6 +13,12 @@ export function testPrisma(): PrismaClient {
 /** Truncates every app table (all public tables except Prisma's migrations table). */
 export async function resetDb(): Promise<void> {
   const prisma = testPrisma();
+  const [{ current_database: dbName } = { current_database: "" }] = await prisma.$queryRaw<
+    { current_database: string }[]
+  >`SELECT current_database()`;
+  if (!dbName.includes("test")) {
+    throw new Error(`resetDb refused: database "${dbName}" is not a test database`);
+  }
   const rows = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables
     WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
