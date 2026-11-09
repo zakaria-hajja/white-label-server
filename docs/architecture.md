@@ -6,34 +6,50 @@ Every request is bound to exactly one tenant before any business code runs. Clie
 trusted on its own: a slug is checked against the database (or deployment config) and the tenant
 claim is trusted only from a signature-verified JWT.
 
-| Mode | No bearer token | Bearer token |
-|---|---|---|
-| `shared` | `X-Client-Id` (tenant slug) is required; tenant must exist and be `ACTIVE` | Tenant = `claims.tid` (must exist and be `ACTIVE`); an `X-Client-Id` naming a different tenant gives `403 TENANT_MISMATCH` |
-| `dedicated` | Tenant = `DEDICATED_TENANT_SLUG`; a sent `X-Client-Id` must match it | Tenant = `claims.tid`, which must equal the deployment tenant (else `401 UNAUTHENTICATED`) |
+Resolver outcomes (`src/core/tenant/shared-resolver.ts`, `dedicated-resolver.ts`, `resolver.ts`).
+"Token" means a signature-verified bearer token carrying `tid`.
+
+| Mode | Token | `X-Client-Id` | Result |
+|---|---|---|---|
+| shared | no | missing | 400 `INVALID_CLIENT` |
+| shared | no | malformed or unknown slug | 400 `INVALID_CLIENT` |
+| shared | no | known slug | tenant from header |
+| shared | yes, tenant exists | none, or the token tenant's slug | tenant from token |
+| shared | yes, tenant exists | anything else (other, unknown or malformed) | 403 `TENANT_MISMATCH` |
+| shared | yes, `tid` unknown | any | 401 `UNAUTHENTICATED` |
+| dedicated | no | none or `DEDICATED_TENANT_SLUG` | the deployment tenant |
+| dedicated | any | any other value | 400 `INVALID_CLIENT` (checked before the token) |
+| dedicated | yes, `tid` is the deployment tenant | none or matching | the deployment tenant |
+| dedicated | yes, `tid` is another tenant | none or matching | 401 `UNAUTHENTICATED` |
+| any | any | any | resolved tenant is `SUSPENDED`: 403 `TENANT_SUSPENDED` (checked last, only for an otherwise valid request) |
 
 ```mermaid
 flowchart TD
-    Req[Incoming request] --> Auth{Bearer token?}
-    Auth -- no --> Mode1{Mode}
-    Mode1 -- shared --> H[X-Client-Id required<br/>→ Tenant by slug<br/>must exist + ACTIVE]
-    Mode1 -- dedicated --> C[Tenant from DEDICATED_TENANT_SLUG<br/>header, if sent, must match]
-    Auth -- yes --> V[Verify JWT signature, iss, aud, exp]
-    V --> Tid[Tenant = claims.tid<br/>must exist + ACTIVE]
-    Tid --> M{Header sent?}
-    M -- yes, different tenant --> X[403 TENANT_MISMATCH]
-    M -- no / same --> Ded{dedicated and tid ≠ deployment tenant?}
-    Ded -- yes --> X2[401 UNAUTHENTICATED]
-    Ded -- no --> Sess[Session sid live for sub + tid]
-    H --> Ctx[Trusted TenantContext]
-    C --> Ctx
-    Sess --> Ctx
+    Req[Incoming request] --> Mode{Mode}
+    Mode -- shared --> STok{Verified token?}
+    STok -- no --> SH{X-Client-Id valid slug<br/>and tenant exists?}
+    SH -- no --> E1[400 INVALID_CLIENT]
+    SH -- yes --> Rec
+    STok -- yes --> STid{tid exists?}
+    STid -- no --> E2[401 UNAUTHENTICATED]
+    STid -- yes --> SHdr{Header sent and<br/>not the token tenant's slug?}
+    SHdr -- yes --> E3[403 TENANT_MISMATCH]
+    SHdr -- no --> Rec
+    Mode -- dedicated --> DH{Header sent and<br/>≠ DEDICATED_TENANT_SLUG?}
+    DH -- yes --> E4[400 INVALID_CLIENT]
+    DH -- no --> DTok{Token tid ≠ deployment tenant?}
+    DTok -- yes --> E5[401 UNAUTHENTICATED]
+    DTok -- no --> Rec
+    Rec[Tenant record] --> Susp{SUSPENDED?}
+    Susp -- yes --> E6[403 TENANT_SUSPENDED]
+    Susp -- no --> Ctx[Trusted TenantContext]
     Ctx --> Svc[Services receive ctx explicitly]
     Svc --> Repo[Repositories: every query WHERE tenantId = ctx.tenantId]
 ```
 
 **Caching and suspension.** Tenant lookups are cached in memory for 30 s (`CachedTenantLookup`;
-misses are never cached). Suspending a tenant with the CLI therefore takes effect within 30 s on
-running servers (immediately in-process, where the cache is invalidated on change).
+misses are never cached). The CLI runs as a separate process and does not touch the server's
+cache, so suspending a tenant takes effect on running servers within 30 s.
 
 **Where enforcement lives.**
 - `route()` (`src/core/http/route.ts`) is the only place a `TenantContext` is created, by calling the
