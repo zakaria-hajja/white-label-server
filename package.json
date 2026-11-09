@@ -1,0 +1,43 @@
+{
+  "name": "whitelabel-backend-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run --project unit",
+    "test:int:shared": "vitest run --project integration-shared --passWithNoTests",
+    "test:int:dedicated": "vitest run --project integration-dedicated --passWithNoTests",
+    "test": "vitest run",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset:test": "prisma migrate reset --force --skip-seed",
+    "openapi:generate": "tsx scripts/generate-openapi.ts",
+    "openapi:lint": "redocly lint openapi/openapi.yaml",
+    "tenant": "tsx scripts/tenant.ts"
+  },
+  "dependencies": {
+    "next": "16.4.3",
+    "react": "19.2.9",
+    "react-dom": "19.2.9"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/react": "19.2.18",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.3",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite-tsconfig-paths": "6.1.1",
+    "vitest": "5.0.5"
+  }
+}
