@@ -1,9 +1,10 @@
 import { getContainer } from "./core/container";
 
-/** Node-only startup checks; exits the process on invalid configuration. */
-export function validateStartup(): void {
+/** Node-only startup checks; exits the process on invalid configuration or tenant. */
+export async function validateStartup(): Promise<void> {
   try {
-    getContainer(); // validates configuration; Task 6 adds the dedicated tenant check
+    const container = getContainer(); // validates configuration
+    if (container.config.mode === "dedicated") await container.tenantResolver.verifyStartup();
   } catch (err) {
     console.error("Startup failed:", err instanceof Error ? err.message : err);
     process.exit(1);

@@ -3,23 +3,42 @@ import { loadConfig, type AppConfig } from "./config/env";
 import { createPrisma, type PrismaClient } from "./database/prisma";
 import { createLogger } from "./logging/logger";
 import { systemClock, type Clock } from "../shared/clock";
+import { DedicatedTenantResolver } from "./tenant/dedicated-resolver";
+import type { TenantResolver } from "./tenant/resolver";
+import { SharedTenantResolver } from "./tenant/shared-resolver";
+import { CachedTenantLookup } from "./tenant/tenant-cache";
+import { PrismaTenantLookup } from "./tenant/tenant.repository";
 
 export type { Logger };
 
-// Tasks 6 and 8 add tenantResolver, rateLimiter and services.
+// Task 8 adds rateLimiter and services.
 export type Container = {
   config: AppConfig;
   prisma: PrismaClient;
   logger: Logger;
   clock: Clock;
+  tenantLookup: CachedTenantLookup;
+  tenantResolver: TenantResolver;
 };
 
 export function createContainer(config: AppConfig, overrides: Partial<Container> = {}): Container {
+  const prisma = overrides.prisma ?? createPrisma(config.databaseUrl);
+  const clock = overrides.clock ?? systemClock;
+  const tenantLookup =
+    overrides.tenantLookup ?? new CachedTenantLookup(new PrismaTenantLookup(prisma), clock);
+  // The only place the deployment mode is read.
+  const tenantResolver =
+    overrides.tenantResolver ??
+    (config.mode === "dedicated"
+      ? new DedicatedTenantResolver(tenantLookup, config)
+      : new SharedTenantResolver(tenantLookup));
   return {
     config,
-    prisma: overrides.prisma ?? createPrisma(config.databaseUrl),
+    prisma,
     logger: overrides.logger ?? createLogger(config.logLevel),
-    clock: overrides.clock ?? systemClock,
+    clock,
+    tenantLookup,
+    tenantResolver,
   };
 }
 

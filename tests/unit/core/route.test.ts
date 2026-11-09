@@ -159,8 +159,62 @@ describe("route()", () => {
 
   it("refuses unwired required modes at definition time", () => {
     const handler = async () => new Response();
-    expect(() => route({ auth: "none", tenant: "required", handler })).toThrow(/not wired/);
     expect(() => route({ auth: "required", tenant: "none", handler })).toThrow(/not wired/);
+  });
+
+  it("returns an envelope 500 with a request id when the container cannot be built", async () => {
+    setContainer(null);
+    const saved = { ...process.env };
+    delete process.env.DEPLOYMENT_MODE;
+    try {
+      const h = route({ auth: "none", tenant: "none", handler: async () => new Response() });
+      const res = await h(post(null), ctx);
+      expect(res.status).toBe(500);
+      expect(res.headers.get("x-request-id")).toBeTruthy();
+      const json = await envelope(res);
+      expect(json.error).toMatchObject({ code: "INTERNAL_ERROR" });
+    } finally {
+      process.env = saved;
+    }
+  });
+
+  it("resolves the tenant only for tenant: required routes and logs its slug", async () => {
+    const calls: unknown[] = [];
+    const record = { tenantId: "t1", slug: "acme", name: "Acme", source: "header" } as const;
+    setContainer(
+      createContainer(config, {
+        prisma: {} as PrismaClient,
+        logger: createLogger(
+          "debug",
+          new Writable({
+            write(chunk, _e, cb) {
+              logLines.push(JSON.parse(String(chunk)));
+              cb();
+            },
+          }),
+        ),
+        tenantResolver: {
+          resolve: async (i) => (calls.push(i), record),
+          verifyStartup: async () => {},
+        },
+      }),
+    );
+    const req = () => post(null, { "x-client-id": "acme" });
+    const needs = route({
+      auth: "none",
+      tenant: "required",
+      handler: async ({ tenant }) => Response.json({ slug: tenant.slug }),
+    });
+    const skips = route({
+      auth: "none",
+      tenant: "none",
+      handler: async ({ tenant }) => Response.json({ tenant }),
+    });
+    expect(await (await needs(req(), ctx)).json()).toEqual({ slug: "acme" });
+    expect(calls).toEqual([{ clientId: "acme", tokenTenantId: null }]);
+    expect(await (await skips(req(), ctx)).json()).toEqual({ tenant: null });
+    expect(calls).toHaveLength(1);
+    expect(logLines.find((l) => l.msg === "request")).toMatchObject({ tenant: "acme" });
   });
 });
 
