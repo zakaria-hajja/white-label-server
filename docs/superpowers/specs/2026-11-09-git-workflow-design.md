@@ -20,6 +20,10 @@ that only exist on paper.
 
 - **Enforcement level 3:** written rules + local git hooks + GitHub branch protection with
   required CI.
+  - *Amended 2026-11-09:* GitHub refused branch protection (private repo, free plan; HTTP
+    403). The owner chose to stay without it: hooks and CI still run, merging on green CI
+    is a discipline. Merge settings (merge commits only, delete branch on merge) were
+    applied. `scripts/github-protect.sh` stays for a later upgrade.
 - **Branch granularity:** one branch/PR per plan phase or user-visible capability; small
   fixes get their own short branch.
 - **Merge style:** merge commits only (squash and rebase merging disabled). Full per-commit

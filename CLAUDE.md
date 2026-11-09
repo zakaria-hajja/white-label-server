@@ -3,8 +3,11 @@
 ## Git workflow
 
 Applies to everyone working in this repo (the owner and Claude). Enforced by `.githooks/`
-(installed by `npm install`), CI (`.github/workflows/ci.yml`, job `ci`) and branch protection
-on `main`. Design: `docs/superpowers/specs/2026-11-09-git-workflow-design.md`.
+(installed by `npm install`) and CI (`.github/workflows/ci.yml`, job `ci`). GitHub does
+**not** enforce anything: the repo is private on a free plan, so branch protection is
+unavailable. Merging only with a green `ci` check is a rule we keep, not one GitHub
+blocks. If the plan changes, run `scripts/github-protect.sh`.
+Design: `docs/superpowers/specs/2026-11-09-git-workflow-design.md`.
 
 1. **Commits** — Conventional Commits: `type(scope): summary`.
    - Types: `feat fix refactor test docs chore ci perf build revert`.
