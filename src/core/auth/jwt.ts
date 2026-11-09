@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { AppConfig } from "../config/env";
 import { AppError } from "../errors/app-error";
 
+export type JwtConfig = AppConfig["jwt"];
+
 export type AccessClaims = { sub: string; tid: string; sid: string };
 
 const claimsSchema = z.object({
@@ -11,11 +13,7 @@ const claimsSchema = z.object({
   sid: z.uuid(),
 });
 
-export function signAccessToken(
-  cfg: AppConfig["jwt"],
-  claims: AccessClaims,
-  now: Date,
-): Promise<string> {
+export function signAccessToken(cfg: JwtConfig, claims: AccessClaims, now: Date): Promise<string> {
   const iat = Math.floor(now.getTime() / 1000);
   return new SignJWT({ tid: claims.tid, sid: claims.sid })
     .setProtectedHeader({ alg: "HS256" })
@@ -28,7 +26,7 @@ export function signAccessToken(
 }
 
 export async function verifyAccessToken(
-  cfg: AppConfig["jwt"],
+  cfg: JwtConfig,
   token: string,
   now: Date = new Date(),
 ): Promise<AccessClaims> {
