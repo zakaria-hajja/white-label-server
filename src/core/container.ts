@@ -9,6 +9,8 @@ import { SharedTenantResolver } from "./tenant/shared-resolver";
 import { CachedTenantLookup } from "./tenant/tenant-cache";
 import { PrismaTenantLookup } from "./tenant/tenant.repository";
 import { PrismaSessionCheck, type SessionCheck } from "./auth/session-check";
+import { PrismaAuthRepository } from "../modules/auth/auth.repository";
+import { AuthService } from "../modules/auth/auth.service";
 import { InMemoryRateLimiter, type RateLimiter } from "./rate-limit/rate-limiter";
 
 export type { Logger };
@@ -22,6 +24,7 @@ export type Container = {
   tenantResolver: TenantResolver;
   rateLimiter: RateLimiter;
   sessionCheck: SessionCheck;
+  services: { auth: AuthService };
 };
 
 export function createContainer(config: AppConfig, overrides: Partial<Container> = {}): Container {
@@ -48,6 +51,13 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
     tenantResolver,
     rateLimiter: overrides.rateLimiter ?? new InMemoryRateLimiter(clock),
     sessionCheck: overrides.sessionCheck ?? new PrismaSessionCheck(prisma, logger),
+    services: overrides.services ?? {
+      auth: new AuthService(
+        new PrismaAuthRepository(prisma),
+        { jwt: config.jwt, sessionTtlDays: config.sessionTtlDays },
+        clock,
+      ),
+    },
   };
 }
 
