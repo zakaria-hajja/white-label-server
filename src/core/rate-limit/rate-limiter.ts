@@ -1,4 +1,5 @@
 import type { Clock } from "../../shared/clock";
+import type { AuthContext } from "../auth/auth-context";
 import type { TenantContext } from "../tenant/tenant-context";
 
 export type RateLimitResult = { allowed: boolean; retryAfterSeconds: number };
@@ -12,7 +13,12 @@ export type RateLimitRule = {
   limit: number;
   windowSeconds: number;
   /** Return null to skip the rule. */
-  key: (c: { ip: string; body: unknown; tenant: TenantContext | null }) => string | null;
+  key: (c: {
+    ip: string;
+    body: unknown;
+    tenant: TenantContext | null;
+    auth: AuthContext | null;
+  }) => string | null;
 };
 
 /**

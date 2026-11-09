@@ -112,7 +112,7 @@ export function route<
       ) as B;
       const ip = clientIp(req, container.config.trustProxy);
       for (const rule of def.rateLimit ?? []) {
-        const key = rule.key({ ip, body, tenant });
+        const key = rule.key({ ip, body, tenant, auth });
         if (key === null) continue;
         const r = container.rateLimiter.hit(`${rule.name}:${key}`, rule.limit, rule.windowSeconds);
         if (!r.allowed) {

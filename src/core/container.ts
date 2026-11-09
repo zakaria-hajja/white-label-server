@@ -10,6 +10,8 @@ import { CachedTenantLookup } from "./tenant/tenant-cache";
 import { PrismaTenantLookup } from "./tenant/tenant.repository";
 import { PrismaSessionCheck, type SessionCheck } from "./auth/session-check";
 import { PrismaAuthRepository } from "../modules/auth/auth.repository";
+import { PrismaUsersRepository } from "../modules/users/users.repository";
+import { UsersService } from "../modules/users/users.service";
 import { AuthService } from "../modules/auth/auth.service";
 import {
   PrismaAppConfigReader,
@@ -32,7 +34,7 @@ export type Container = {
   sessionCheck: SessionCheck;
   appConfigReader: AppConfigReader;
   mailer: Mailer;
-  services: { auth: AuthService };
+  services: { auth: AuthService; users: UsersService };
 };
 
 export function createContainer(config: AppConfig, overrides: Partial<Container> = {}): Container {
@@ -75,6 +77,7 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
           logger,
         },
       ),
+      users: new UsersService(new PrismaUsersRepository(prisma), clock),
     },
   };
 }
