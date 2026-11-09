@@ -1,11 +1,18 @@
 #!/bin/sh
 # Enforces Conventional Commits headers: type(scope): summary, <= 72 chars.
+# Usage: commit-msg [--strict] <message-file>
+#   --strict (used by CI): no fixup!/squash!/amend!/Merge exemptions, since those
+#   would land on main as-is with merge-commit merging.
 set -eu
+
+strict=false
+if [ "${1:-}" = "--strict" ]; then strict=true; shift; fi
 
 header=$(grep -v '^#' "$1" | head -n 1 || true)
 
 case "$header" in
-  "Merge "* | 'Revert "'* | "fixup! "* | "squash! "* | "amend! "*) exit 0 ;;
+  'Revert "'*) exit 0 ;;
+  "Merge "* | "fixup! "* | "squash! "* | "amend! "*) [ "$strict" = true ] || exit 0 ;;
 esac
 
 fail() {
@@ -20,4 +27,7 @@ fail() {
 
 pattern='^(feat|fix|refactor|test|docs|chore|ci|perf|build|revert)(\([a-z0-9]+(-[a-z0-9]+)*\))?!?: [^ ].*$'
 printf '%s\n' "$header" | grep -Eq "$pattern" || fail "header does not match the format"
-[ "${#header}" -le 72 ] || fail "header is ${#header} chars; the limit is 72"
+
+# Count UTF-8 characters, not bytes, independent of locale (drop continuation bytes).
+length=$(printf '%s' "$header" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' ')
+[ "$length" -le 72 ] || fail "header is $length chars; the limit is 72"

@@ -71,3 +71,39 @@ describe("pre-push hook", () => {
     expect(r.stderr).toContain("main");
   });
 });
+
+describe("commit-msg hook: review fixes", () => {
+  it("counts characters, not bytes, regardless of locale", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "commit-msg-")), "MSG");
+    writeFileSync(file, "feat: café " + "a".repeat(61)); // 72 characters, 73 bytes
+    const r = spawnSync("sh", [join(HOOKS, "commit-msg"), file], {
+      encoding: "utf8",
+      env: { ...process.env, LC_ALL: "C" },
+    });
+    expect(r.status).toBe(0);
+  });
+
+  it.each(["fixup! feat: x", "squash! feat: x", "amend! feat: x", "Merge stuff"])(
+    "rejects %j in --strict mode (CI)",
+    (msg) => {
+      const file = join(mkdtempSync(join(tmpdir(), "commit-msg-")), "MSG");
+      writeFileSync(file, msg);
+      expect(run("commit-msg", ["--strict", file]).code).toBe(1);
+    },
+  );
+
+  it("accepts a valid header in --strict mode", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "commit-msg-")), "MSG");
+    writeFileSync(file, "feat: x");
+    expect(run("commit-msg", ["--strict", file]).code).toBe(0);
+  });
+});
+
+describe("check-commit-messages script", () => {
+  it("fails when the range cannot be resolved", () => {
+    const r = spawnSync("sh", [resolve(__dirname, "../../scripts/check-commit-messages.sh"), "deadbeef".repeat(5), "HEAD"], {
+      encoding: "utf8",
+    });
+    expect(r.status).not.toBe(0);
+  });
+});
