@@ -1,0 +1,12 @@
+#!/bin/sh
+# Refuses pushes to main; runs lint, typecheck and unit tests before any other push.
+set -eu
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "pre-push: pushing to main is not allowed; open a pull request instead" >&2
+    exit 1
+  fi
+done
+
+npm run -s lint && npm run -s typecheck && npm run -s test:unit

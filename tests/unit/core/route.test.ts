@@ -1,0 +1,177 @@
+import { Writable } from "node:stream";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import { envelope } from "../../helpers/http";
+import { loadConfig } from "@/core/config/env";
+import { createContainer, setContainer } from "@/core/container";
+import { AppError } from "@/core/errors/app-error";
+import { clientIp } from "@/core/http/client-ip";
+import { route } from "@/core/http/route";
+import { createLogger } from "@/core/logging/logger";
+import type { PrismaClient } from "@/core/database/prisma";
+
+const config = loadConfig({
+  DEPLOYMENT_MODE: "shared",
+  DATABASE_URL: "postgresql://x:y@localhost:5432/none",
+  JWT_SECRET: "test-jwt-secret-test-jwt-secret-0123456789",
+});
+
+let logLines: Record<string, unknown>[];
+
+beforeEach(() => {
+  logLines = [];
+  const dest = new Writable({
+    write(chunk, _enc, cb) {
+      logLines.push(JSON.parse(String(chunk)));
+      cb();
+    },
+  });
+  setContainer(
+    createContainer(config, { prisma: {} as PrismaClient, logger: createLogger("debug", dest) }),
+  );
+});
+afterEach(() => setContainer(null));
+
+const ctx = { params: Promise.resolve({}) };
+const post = (body: string | null | null, headers: Record<string, string> = {}) =>
+  new Request("http://localhost/api/v1/x?secret=1", {
+    method: "POST",
+    body,
+    headers: { "content-type": "application/json", ...headers },
+  });
+
+const bodyRoute = route({
+  auth: "none",
+  tenant: "none",
+  body: z.object({ email: z.email() }),
+  handler: async ({ body, requestId }) => Response.json({ email: body.email, requestId }),
+});
+
+describe("route()", () => {
+  it("maps AppError to its envelope", async () => {
+    const h = route({
+      auth: "none",
+      tenant: "none",
+      handler: async () => {
+        throw new AppError("NOT_FOUND");
+      },
+    });
+    const res = await h(new Request("http://localhost/x"), ctx);
+    expect(res.status).toBe(404);
+    expect((await envelope(res))?.error?.code).toBe("NOT_FOUND");
+  });
+
+  it("hides unknown error details and logs the error", async () => {
+    const h = route({
+      auth: "none",
+      tenant: "none",
+      handler: async () => {
+        throw new Error("db password=abc");
+      },
+    });
+    const res = await h(new Request("http://localhost/x"), ctx);
+    const text = await res.text();
+    expect(res.status).toBe(500);
+    expect(JSON.parse(text).error.code).toBe("INTERNAL_ERROR");
+    expect(text).not.toContain("abc");
+    expect(text).not.toContain("stack");
+    expect(logLines.some((l) => l.level === 50 && l.err)).toBe(true);
+  });
+
+  it("returns 400 with dotted paths for schema failures", async () => {
+    const res = await bodyRoute(post(JSON.stringify({ email: "nope" })), ctx);
+    const json = await envelope(res);
+    expect(res.status).toBe(400);
+    expect(json.error?.code).toBe("VALIDATION_ERROR");
+    expect(json.error?.details?.[0]?.path).toBe("email");
+  });
+
+  it("rejects malformed JSON, null body, wrong content type", async () => {
+    for (const res of [
+      await bodyRoute(post("{not json"), ctx),
+      await bodyRoute(post(null), ctx),
+      await bodyRoute(post("null"), ctx),
+      await bodyRoute(post("{}", { "content-type": "text/plain" }), ctx),
+    ]) {
+      expect(res.status).toBe(400);
+      expect((await envelope(res))?.error?.code).toBe("VALIDATION_ERROR");
+    }
+  });
+
+  it("rejects oversized bodies with 413", async () => {
+    const big = JSON.stringify({ email: "a@b.co", pad: "x".repeat(70_000) });
+    const res = await bodyRoute(post(big), ctx);
+    expect(res.status).toBe(413);
+    expect((await envelope(res))?.error?.code).toBe("PAYLOAD_TOO_LARGE");
+  });
+
+  it("enforces the limit on a stream with no content-length", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(`{"a":"${"x".repeat(70_000)}"}`));
+        c.close();
+      },
+    });
+    const req = new Request("http://localhost/x", {
+      method: "POST",
+      body: stream,
+      headers: { "content-type": "application/json" },
+      duplex: "half",
+    });
+    expect((await bodyRoute(req, ctx)).status).toBe(413);
+  });
+
+  it("parses query and params", async () => {
+    const h = route({
+      auth: "none",
+      tenant: "none",
+      query: z.object({ n: z.coerce.number() }),
+      params: z.object({ id: z.string() }),
+      handler: async ({ query, params }) => Response.json({ n: query.n, id: params.id }),
+    });
+    const res = await h(new Request("http://localhost/x?n=5"), {
+      params: Promise.resolve({ id: "abc" }),
+    });
+    expect(await envelope(res)).toEqual({ n: 5, id: "abc" });
+  });
+
+  it("echoes a valid X-Request-Id and replaces an unsafe one", async () => {
+    const res1 = await bodyRoute(
+      post(JSON.stringify({ email: "a@b.co" }), { "x-request-id": "abcdef12" }),
+      ctx,
+    );
+    expect(res1.headers.get("x-request-id")).toBe("abcdef12");
+    const res2 = await bodyRoute(
+      post(JSON.stringify({ email: "a@b.co" }), { "x-request-id": "<script>" }),
+      ctx,
+    );
+    expect(res2.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("logs flat fields only, without query string or body", async () => {
+    await bodyRoute(post(JSON.stringify({ email: "a@b.co" })), ctx);
+    const line = logLines.find((l) => l.msg === "request");
+    expect(line).toMatchObject({ method: "POST", path: "/api/v1/x", status: 200 });
+    expect(typeof line?.durationMs).toBe("number");
+    expect(JSON.stringify(logLines)).not.toContain("secret=1");
+    expect(JSON.stringify(logLines)).not.toContain("a@b.co");
+  });
+
+  it("refuses unwired required modes at definition time", () => {
+    const handler = async () => new Response();
+    expect(() => route({ auth: "none", tenant: "required", handler })).toThrow(/not wired/);
+    expect(() => route({ auth: "required", tenant: "none", handler })).toThrow(/not wired/);
+  });
+});
+
+describe("clientIp", () => {
+  const req = new Request("http://localhost/x", {
+    headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
+  });
+  it("ignores X-Forwarded-For when trustProxy is false", () => {
+    expect(clientIp(req, false)).toBe("unknown");
+  });
+  it("uses the first X-Forwarded-For entry when trusted", () => {
+    expect(clientIp(req, true)).toBe("1.2.3.4");
+  });
+});
