@@ -8,10 +8,11 @@ import type { TenantResolver } from "./tenant/resolver";
 import { SharedTenantResolver } from "./tenant/shared-resolver";
 import { CachedTenantLookup } from "./tenant/tenant-cache";
 import { PrismaTenantLookup } from "./tenant/tenant.repository";
+import { PrismaSessionCheck, type SessionCheck } from "./auth/session-check";
+import { InMemoryRateLimiter, type RateLimiter } from "./rate-limit/rate-limiter";
 
 export type { Logger };
 
-// Task 8 adds rateLimiter and services.
 export type Container = {
   config: AppConfig;
   prisma: PrismaClient;
@@ -19,6 +20,8 @@ export type Container = {
   clock: Clock;
   tenantLookup: CachedTenantLookup;
   tenantResolver: TenantResolver;
+  rateLimiter: RateLimiter;
+  sessionCheck: SessionCheck;
 };
 
 export function createContainer(config: AppConfig, overrides: Partial<Container> = {}): Container {
@@ -32,13 +35,19 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
     (config.mode === "dedicated"
       ? new DedicatedTenantResolver(tenantLookup, config)
       : new SharedTenantResolver(tenantLookup));
+  const logger = overrides.logger ?? createLogger(config.logLevel);
+  if (config.nodeEnv === "production" && !config.trustProxy) {
+    logger.warn("TRUST_PROXY is false: client IP is unknown, so IP-based rate limits are disabled");
+  }
   return {
     config,
     prisma,
-    logger: overrides.logger ?? createLogger(config.logLevel),
+    logger,
     clock,
     tenantLookup,
     tenantResolver,
+    rateLimiter: overrides.rateLimiter ?? new InMemoryRateLimiter(clock),
+    sessionCheck: overrides.sessionCheck ?? new PrismaSessionCheck(prisma, logger),
   };
 }
 

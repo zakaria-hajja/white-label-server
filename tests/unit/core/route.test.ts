@@ -157,9 +157,9 @@ describe("route()", () => {
     expect(JSON.stringify(logLines)).not.toContain("a@b.co");
   });
 
-  it("refuses unwired required modes at definition time", () => {
+  it('refuses auth "required" without tenant "required" at definition time', () => {
     const handler = async () => new Response();
-    expect(() => route({ auth: "required", tenant: "none", handler })).toThrow(/not wired/);
+    expect(() => route({ auth: "required", tenant: "none", handler })).toThrow(/tenant "required"/);
   });
 
   it("returns an envelope 500 with a request id when the container cannot be built", async () => {

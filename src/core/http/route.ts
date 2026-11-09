@@ -5,13 +5,23 @@ import { getContainer, type Container, type Logger } from "../container";
 import { createLogger } from "../logging/logger";
 import { CLIENT_ID_HEADER, type TenantContext } from "../tenant/tenant-context";
 import { readJsonBody } from "./body";
+import { verifyAccessToken } from "../auth/jwt";
 import { clientIp } from "./client-ip";
 import { fail } from "./envelope";
+import type { RateLimitRule } from "../rate-limit/rate-limiter";
 import { resolveRequestId } from "./request-id";
 
 export type TenantMode = "required" | "none";
 
-export type RouteContext<B, Q, P, T extends TenantMode = TenantMode> = {
+export type AuthMode = "none" | "required";
+
+export type RouteContext<
+  B,
+  Q,
+  P,
+  T extends TenantMode = TenantMode,
+  A extends AuthMode = AuthMode,
+> = {
   req: Request;
   requestId: string;
   ip: string;
@@ -19,18 +29,24 @@ export type RouteContext<B, Q, P, T extends TenantMode = TenantMode> = {
   query: Q;
   params: P;
   tenant: T extends "required" ? TenantContext : null;
-  auth: AuthContext | null;
+  auth: A extends "required" ? AuthContext : null;
   container: Container;
   logger: Logger;
 };
 
-export type RouteDef<B, Q, P, T extends TenantMode = TenantMode> = {
-  auth: "none" | "required";
+/**
+ * `auth: "required"` implies tenant resolution (the token's tenant is authoritative), so it is only
+ * allowed together with `tenant: "required"`; route() throws at definition time otherwise.
+ */
+export type RouteDef<B, Q, P, T extends TenantMode = TenantMode, A extends AuthMode = AuthMode> = {
+  auth: A;
   tenant: T;
   body?: ZodType<B>;
   query?: ZodType<Q>;
   params?: ZodType<P>;
-  handler: (c: RouteContext<B, Q, P, T>) => Promise<Response>;
+  /** Evaluated after input parsing, before the handler. */
+  rateLimit?: RateLimitRule[];
+  handler: (c: RouteContext<B, Q, P, T, A>) => Promise<Response>;
 };
 
 export type RouteHandler = (
@@ -48,10 +64,10 @@ export function route<
   Q = undefined,
   P = undefined,
   T extends TenantMode = TenantMode,
->(def: RouteDef<B, Q, P, T>): RouteHandler {
-  // Authentication (Task 8) is not wired yet.
-  if (def.auth === "required") {
-    throw new Error('route(): auth "required" is not wired yet (Task 8)');
+  A extends AuthMode = AuthMode,
+>(def: RouteDef<B, Q, P, T, A>): RouteHandler {
+  if (def.auth === "required" && def.tenant !== "required") {
+    throw new Error('route(): auth "required" needs tenant "required"');
   }
 
   return async (req, ctx) => {
@@ -59,18 +75,31 @@ export function route<
     const requestId = resolveRequestId(req);
     let logger: Logger = fallbackLogger;
     let tenant: TenantContext | null = null;
+    let auth: AuthContext | null = null;
     let response: Response;
     try {
       const container = getContainer();
       logger = container.logger.child({ requestId });
-      // Order: (rate limit: Task 8) -> tenant -> (auth: Task 8) -> input parsing.
-      if (def.tenant === "required") {
+      // Order: tenant (+ auth) -> input parsing -> rate limit -> handler.
+      if (def.auth === "required") {
+        const now = container.clock.now();
+        const claims = await verifyAccessToken(
+          container.config.jwt,
+          extractBearer(req.headers.get("authorization")),
+          now,
+        );
         tenant = await container.tenantResolver.resolve({
           clientId: req.headers.get(CLIENT_ID_HEADER),
-          tokenTenantId: null, // Task 8 passes the verified token's tenant
+          tokenTenantId: claims.tid,
+        });
+        await container.sessionCheck.assertLive(claims, now);
+        auth = { userId: claims.sub, tenantId: claims.tid, sessionId: claims.sid };
+      } else if (def.tenant === "required") {
+        tenant = await container.tenantResolver.resolve({
+          clientId: req.headers.get(CLIENT_ID_HEADER),
+          tokenTenantId: null,
         });
       }
-      // Task 8 inserts authentication here (after tenant, before input parsing).
       const params = (def.params ? def.params.parse(await ctx.params) : undefined) as P;
       const url = new URL(req.url);
       const query = (
@@ -81,19 +110,30 @@ export function route<
           ? def.body.parse(await readJsonBody(req, container.config.maxBodyBytes))
           : undefined
       ) as B;
-      // The tenant type is guaranteed by the branch above; TS cannot see through T.
+      const ip = clientIp(req, container.config.trustProxy);
+      for (const rule of def.rateLimit ?? []) {
+        const key = rule.key({ ip, body, tenant });
+        if (key === null) continue;
+        const r = container.rateLimiter.hit(`${rule.name}:${key}`, rule.limit, rule.windowSeconds);
+        if (!r.allowed) {
+          throw new AppError("RATE_LIMITED", undefined, undefined, {
+            "retry-after": String(Math.max(1, Math.ceil(r.retryAfterSeconds))),
+          });
+        }
+      }
+      // The tenant/auth types are guaranteed by the branches above; TS cannot see through T and A.
       const routeCtx = {
         req,
         requestId,
-        ip: clientIp(req, container.config.trustProxy),
+        ip,
         body,
         query,
         params,
         tenant,
-        auth: null,
+        auth,
         container,
         logger,
-      } as RouteContext<B, Q, P, T>;
+      } as RouteContext<B, Q, P, T, A>;
       response = await def.handler(routeCtx);
       response.headers.set("x-request-id", requestId);
     } catch (err) {
@@ -111,6 +151,12 @@ export function route<
     );
     return response;
   };
+}
+
+function extractBearer(header: string | null): string {
+  const m = header ? /^bearer +(\S+)$/i.exec(header.trim()) : null;
+  if (!m?.[1]) throw new AppError("UNAUTHENTICATED");
+  return m[1];
 }
 
 function toErrorResponse(err: unknown, requestId: string, logger: Logger): Response {
