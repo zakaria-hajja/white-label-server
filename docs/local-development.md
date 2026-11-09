@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Node 24 (see `.nvmrc`; `package.json` enforces `>=24 <25`).
-- A Docker runtime, for example OrbStack or Docker Desktop, with the `docker compose` plugin.
+- Docker Desktop (`brew install --cask docker-desktop`, then open it once to accept the license). It provides `docker` and the `docker compose` plugin.
 
 ## 1. Install dependencies
 
