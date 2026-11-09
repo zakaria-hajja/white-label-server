@@ -35,6 +35,24 @@
 
 ---
 
+## Phases and PRs
+
+Git workflow rules: `CLAUDE.md` § Git workflow (built by "Task 0: Git workflow",
+`docs/superpowers/plans/2026-11-09-git-workflow.md`). Each phase is one branch and one PR:
+
+| Branch | Tasks |
+|--------|-------|
+| `feat/foundation` | 0–5 |
+| `feat/tenancy` | 6–7 |
+| `feat/auth-users` | 8–12 |
+| `feat/modules` | 13–15 |
+| `feat/security-openapi-ci` | 16–18 |
+| `docs/guides` | 19 |
+
+At every checkpoint ("Report and wait", Task 5, and the end of Tasks 18 and 19): push the
+branch, open a PR with `gh pr create` filled in from `.github/pull_request_template.md`,
+report, and wait for the owner to merge. Then branch the next phase from the updated `main`.
+
 ## Phase 2 — Foundation
 
 ### Task 1: Toolchain and Next.js skeleton
@@ -402,12 +420,12 @@ Resolution rules (design §8):
 ### Task 18: Docker and CI
 
 **Files:**
-- Create: `Dockerfile`, `.dockerignore`, `.github/workflows/ci.yml`
-- Modify: `docker-compose.yml` (the `api` service under profile `app`)
+- Create: `Dockerfile`, `.dockerignore`
+- Modify: `docker-compose.yml` (the `api` service under profile `app`), `.github/workflows/ci.yml` (created by Task 0)
 
 - [ ] **Step 1: Dockerfile:** multi-stage on `node:24-slim` (glibc, for prebuilt argon2): deps (`npm ci`) → build (`prisma generate`, `next build`) → runtime (copies `.next/standalone`, `.next/static`, `prisma/`, generated client; runs as the non-root `node` user; `EXPOSE 3000`; `CMD ["node","server.js"]`). Migrations are a separate command: `docker run <image> npx prisma migrate deploy`.
 - [ ] **Step 2: Verify:** `docker build -t whitelabel-api .` succeeds; `docker compose --profile app up` with shared env → `curl localhost:3000/api/v1/health` returns `"db":"up"`; with `DEPLOYMENT_MODE=dedicated` and an unknown slug the container exits non-zero with a config error in its logs.
-- [ ] **Step 3: CI workflow** (`on: push, pull_request`), one job with a `postgres:17` service; steps: checkout → setup-node 24 with npm cache → `npm ci` → `npm run lint` → `npm run typecheck` → `npx prisma validate` → create the test DBs → `npx prisma migrate deploy` on each → `npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code` (shadow DB URL from env; fails if the schema has unmigrated changes) → `npm run test:unit` → `npm run test:int:shared` → `npm run test:int:dedicated` → `npm run openapi:generate && git diff --exit-code openapi/` → `npm run openapi:lint` → `npm run build`. Secrets in CI are throwaway literals (`JWT_SECRET` 32+ chars).
+- [ ] **Step 3: Extend `.github/workflows/ci.yml`** (keep the job id `ci`, its triggers, and the "Commit messages" step): add a `postgres:17` service to the job; steps: checkout → setup-node 24 with npm cache → `npm ci` → `npm run lint` → `npm run typecheck` → `npx prisma validate` → create the test DBs → `npx prisma migrate deploy` on each → `npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code` (shadow DB URL from env; fails if the schema has unmigrated changes) → `npm run test:unit` → `npm run test:int:shared` → `npm run test:int:dedicated` → `npm run openapi:generate && git diff --exit-code openapi/` → `npm run openapi:lint` → `npm run build`. Secrets in CI are throwaway literals (`JWT_SECRET` 32+ chars).
 - [ ] **Step 4: Verify** locally with the same command sequence (or `act` if available). Expected: every step exits 0.
 - [ ] **Step 5: Commit** `ci: docker image and GitHub Actions pipeline`.
 
