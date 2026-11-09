@@ -210,10 +210,10 @@ export class AuthService {
 
   async resetPassword(ctx: TenantContext, token: string, newPassword: string): Promise<void> {
     const invalid = () => new AppError("INVALID_RESET_TOKEN");
-    const found = await this.repo.findResetTokenByHash(hashToken(token));
+    const found = await this.repo.findResetTokenByHash(ctx.tenantId, hashToken(token));
     const now = this.clock.now();
-    // A token from another tenant is indistinguishable from an unknown one and is not consumed.
-    if (!found || found.tenantId !== ctx.tenantId) throw invalid();
+    // The lookup is tenant-scoped: another tenant's token is simply not found, and never consumed.
+    if (!found) throw invalid();
     if (found.usedAt !== null || found.expiresAt <= now) throw invalid();
     const user = await this.repo.findUserById(ctx.tenantId, found.userId);
     if (!user || user.status !== "ACTIVE") throw invalid();
@@ -221,7 +221,7 @@ export class AuthService {
     // Argon2 is slow: hash before opening the transaction.
     const passwordHash = await hashPassword(newPassword);
     await this.repo.transaction(async (repo) => {
-      if (!(await repo.consumeResetToken(found.id, now))) throw invalid();
+      if (!(await repo.consumeResetToken(ctx.tenantId, found.id, now))) throw invalid();
       await repo.updatePassword(ctx.tenantId, user.id, passwordHash, now);
       await repo.revokeAllSessions(ctx.tenantId, user.id, "password_reset", now);
       await repo.invalidateResetTokens(ctx.tenantId, user.id, now);

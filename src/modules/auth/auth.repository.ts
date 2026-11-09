@@ -65,10 +65,10 @@ export interface AuthRepository {
   ): Promise<void>;
   /** Marks the user's unused reset tokens as used. */
   invalidateResetTokens(tenantId: string, userId: string, now: Date): Promise<void>;
-  /** Not tenant-scoped (the caller does not know the tenant from the token); callers must check `tenantId`. */
-  findResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | null>;
+  /** A token belonging to another tenant is not found. */
+  findResetTokenByHash(tenantId: string, tokenHash: string): Promise<PasswordResetToken | null>;
   /** Atomically consumes the token if unused and unexpired at `now`. Returns false when it lost. */
-  consumeResetToken(id: string, now: Date): Promise<boolean>;
+  consumeResetToken(tenantId: string, id: string, now: Date): Promise<boolean>;
   /** Sets the hash and passwordChangedAt, and clears failed-login count and lock. */
   updatePassword(tenantId: string, userId: string, passwordHash: string, now: Date): Promise<void>;
   /** Runs fn against a repository bound to one database transaction. */
@@ -219,13 +219,13 @@ export class PrismaAuthRepository implements AuthRepository {
     });
   }
 
-  findResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | null> {
-    return this.db.passwordResetToken.findUnique({ where: { tokenHash } });
+  findResetTokenByHash(tenantId: string, tokenHash: string): Promise<PasswordResetToken | null> {
+    return this.db.passwordResetToken.findFirst({ where: { tenantId, tokenHash } });
   }
 
-  async consumeResetToken(id: string, now: Date): Promise<boolean> {
+  async consumeResetToken(tenantId: string, id: string, now: Date): Promise<boolean> {
     const { count } = await this.db.passwordResetToken.updateMany({
-      where: { id, usedAt: null, expiresAt: { gt: now } },
+      where: { id, tenantId, usedAt: null, expiresAt: { gt: now } },
       data: { usedAt: now },
     });
     return count === 1;

@@ -195,12 +195,14 @@ export class FakeAuthRepository implements AuthRepository {
     return Promise.resolve();
   }
 
-  findResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | null> {
-    return Promise.resolve(this.resetTokens.find((t) => t.tokenHash === tokenHash) ?? null);
+  findResetTokenByHash(tenantId: string, tokenHash: string): Promise<PasswordResetToken | null> {
+    return Promise.resolve(
+      this.resetTokens.find((t) => t.tenantId === tenantId && t.tokenHash === tokenHash) ?? null,
+    );
   }
 
-  consumeResetToken(id: string, now: Date): Promise<boolean> {
-    const t = this.resetTokens.find((x) => x.id === id);
+  consumeResetToken(tenantId: string, id: string, now: Date): Promise<boolean> {
+    const t = this.resetTokens.find((x) => x.id === id && x.tenantId === tenantId);
     if (!t || t.usedAt !== null || t.expiresAt <= now) return Promise.resolve(false);
     t.usedAt = now;
     return Promise.resolve(true);
