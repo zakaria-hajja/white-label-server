@@ -1,3 +1,4 @@
+import type { Logger } from "pino";
 import { dummyVerify, hashPassword, verifyPassword } from "@/core/auth/password";
 import { signAccessToken, type JwtConfig } from "@/core/auth/jwt";
 import { generateOpaqueToken, hashToken } from "@/core/auth/tokens";
@@ -7,6 +8,9 @@ import type { Clock } from "@/shared/clock";
 import type { TenantContext } from "@/core/tenant/tenant-context";
 import type { AuthRepository } from "./auth.repository";
 import type { LoginInput, RegisterInput } from "./auth.schemas";
+import type { AppConfigReader } from "../app-config/app-config.reader";
+import type { Mailer } from "../mail/mailer";
+import { buildResetLink } from "./reset-link";
 import { toSessionDto, toUserDto, type SessionDto, type UserDto } from "./user.dto";
 import type { AuthContext } from "@/core/auth/auth-context";
 
@@ -20,6 +24,13 @@ export type TokenPair = {
 export type AuthServiceConfig = {
   jwt: JwtConfig;
   sessionTtlDays: number;
+};
+
+export type ResetDeps = {
+  passwordResetTtlMinutes: number;
+  appConfig: AppConfigReader;
+  mailer: Mailer;
+  logger: Logger;
 };
 
 export type RequestMeta = { userAgent: string | null; ip: string };
@@ -37,6 +48,7 @@ export class AuthService {
     private readonly repo: AuthRepository,
     private readonly cfg: AuthServiceConfig,
     private readonly clock: Clock,
+    private readonly reset: ResetDeps,
   ) {}
 
   async register(ctx: TenantContext, input: RegisterInput, meta: RequestMeta): Promise<AuthResult> {
@@ -166,6 +178,54 @@ export class AuthService {
     const session = await this.repo.findSession(ctx.tenantId, auth.userId, sessionId);
     if (!session) throw new AppError("NOT_FOUND");
     await this.repo.revokeSession(ctx.tenantId, session.id, "user_revoked", this.clock.now());
+  }
+
+  /** Always resolves: the response must not reveal whether the account exists. */
+  async forgotPassword(ctx: TenantContext, email: string): Promise<void> {
+    const user = await this.repo.findUserByEmail(ctx.tenantId, email);
+    if (!user || user.status !== "ACTIVE") return;
+    const now = this.clock.now();
+    const token = generateOpaqueToken();
+    const expiresAt = new Date(now.getTime() + this.reset.passwordResetTtlMinutes * 60_000);
+    await this.repo.transaction(async (repo) => {
+      await repo.invalidateResetTokens(ctx.tenantId, user.id, now);
+      await repo.createResetToken(ctx.tenantId, user.id, hashToken(token), expiresAt);
+    });
+    try {
+      const doc = await this.reset.appConfig.getDocument(ctx.tenantId);
+      await this.reset.mailer.sendPasswordReset({
+        to: user.email,
+        tenantName: ctx.name,
+        resetLink: buildResetLink(doc.passwordReset.linkBaseUrl, token),
+        expiresAt,
+      });
+    } catch (err) {
+      // Never surfaced: a failure here must not become an account-existence oracle.
+      this.reset.logger.error(
+        { err, tenantId: ctx.tenantId },
+        "failed to send password reset email",
+      );
+    }
+  }
+
+  async resetPassword(ctx: TenantContext, token: string, newPassword: string): Promise<void> {
+    const invalid = () => new AppError("INVALID_RESET_TOKEN");
+    const found = await this.repo.findResetTokenByHash(hashToken(token));
+    const now = this.clock.now();
+    // A token from another tenant is indistinguishable from an unknown one and is not consumed.
+    if (!found || found.tenantId !== ctx.tenantId) throw invalid();
+    if (found.usedAt !== null || found.expiresAt <= now) throw invalid();
+    const user = await this.repo.findUserById(ctx.tenantId, found.userId);
+    if (!user || user.status !== "ACTIVE") throw invalid();
+
+    // Argon2 is slow: hash before opening the transaction.
+    const passwordHash = await hashPassword(newPassword);
+    await this.repo.transaction(async (repo) => {
+      if (!(await repo.consumeResetToken(found.id, now))) throw invalid();
+      await repo.updatePassword(ctx.tenantId, user.id, passwordHash, now);
+      await repo.revokeAllSessions(ctx.tenantId, user.id, "password_reset", now);
+      await repo.invalidateResetTokens(ctx.tenantId, user.id, now);
+    });
   }
 
   private async createSession(

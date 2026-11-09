@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { resetDeps } from "../../../helpers/fakes/reset-deps";
 import { FakeAuthRepository } from "../../../helpers/fakes/auth-repository.fake";
 import { verifyAccessToken } from "@/core/auth/jwt";
 import type { TenantContext } from "@/core/tenant/tenant-context";
@@ -39,7 +40,7 @@ let first: string;
 beforeEach(async () => {
   now = new Date("2026-01-01T00:00:00Z");
   repo = new FakeAuthRepository(clock.now);
-  service = new AuthService(repo, cfg, clock);
+  service = new AuthService(repo, cfg, clock, resetDeps);
   const r = await service.register(A, { email: "a@b.co", password: "correct-horse-1" }, META);
   first = r.tokens.refreshToken;
 });

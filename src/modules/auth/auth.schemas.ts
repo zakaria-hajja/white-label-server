@@ -25,6 +25,13 @@ const refreshTokenField = z.string().min(1).max(256);
 export const refreshBody = z.object({ refreshToken: refreshTokenField }).strict();
 export const logoutBody = refreshBody;
 
+export const forgotPasswordBody = z.object({ email: zEmail }).strict();
+export const resetPasswordBody = z
+  .object({ token: z.string().min(1).max(256), newPassword: zPassword })
+  .strict();
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordBody>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordBody>;
 export type RefreshInput = z.infer<typeof refreshBody>;
 export type RegisterInput = z.infer<typeof registerBody>;
 export type LoginInput = z.infer<typeof loginBody>;

@@ -1,4 +1,10 @@
-import type { Prisma, RefreshToken, Session, User } from "@/generated/prisma/client";
+import type {
+  PasswordResetToken,
+  Prisma,
+  RefreshToken,
+  Session,
+  User,
+} from "@/generated/prisma/client";
 import type { PrismaClient } from "@/core/database/prisma";
 
 export type NewUser = {
@@ -51,6 +57,20 @@ export interface AuthRepository {
   /** Not revoked and not expired, newest lastUsedAt first. */
   listActiveSessions(tenantId: string, userId: string, now: Date): Promise<Session[]>;
   findSession(tenantId: string, userId: string, sessionId: string): Promise<Session | null>;
+  createResetToken(
+    tenantId: string,
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<void>;
+  /** Marks the user's unused reset tokens as used. */
+  invalidateResetTokens(tenantId: string, userId: string, now: Date): Promise<void>;
+  /** Not tenant-scoped (the caller does not know the tenant from the token); callers must check `tenantId`. */
+  findResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | null>;
+  /** Atomically consumes the token if unused and unexpired at `now`. Returns false when it lost. */
+  consumeResetToken(id: string, now: Date): Promise<boolean>;
+  /** Sets the hash and passwordChangedAt, and clears failed-login count and lock. */
+  updatePassword(tenantId: string, userId: string, passwordHash: string, now: Date): Promise<void>;
   /** Runs fn against a repository bound to one database transaction. */
   transaction<T>(fn: (repo: AuthRepository) => Promise<T>): Promise<T>;
 }
@@ -181,6 +201,46 @@ export class PrismaAuthRepository implements AuthRepository {
 
   findSession(tenantId: string, userId: string, sessionId: string): Promise<Session | null> {
     return this.db.session.findFirst({ where: { id: sessionId, tenantId, userId } });
+  }
+
+  async createResetToken(
+    tenantId: string,
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    await this.db.passwordResetToken.create({ data: { tenantId, userId, tokenHash, expiresAt } });
+  }
+
+  async invalidateResetTokens(tenantId: string, userId: string, now: Date): Promise<void> {
+    await this.db.passwordResetToken.updateMany({
+      where: { tenantId, userId, usedAt: null },
+      data: { usedAt: now },
+    });
+  }
+
+  findResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | null> {
+    return this.db.passwordResetToken.findUnique({ where: { tokenHash } });
+  }
+
+  async consumeResetToken(id: string, now: Date): Promise<boolean> {
+    const { count } = await this.db.passwordResetToken.updateMany({
+      where: { id, usedAt: null, expiresAt: { gt: now } },
+      data: { usedAt: now },
+    });
+    return count === 1;
+  }
+
+  async updatePassword(
+    tenantId: string,
+    userId: string,
+    passwordHash: string,
+    now: Date,
+  ): Promise<void> {
+    await this.db.user.update({
+      where: { tenantId_id: { tenantId, id: userId } },
+      data: { passwordHash, passwordChangedAt: now, failedLoginCount: 0, lockedUntil: null },
+    });
   }
 
   transaction<T>(fn: (repo: AuthRepository) => Promise<T>): Promise<T> {

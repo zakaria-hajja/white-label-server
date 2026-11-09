@@ -11,6 +11,12 @@ import { PrismaTenantLookup } from "./tenant/tenant.repository";
 import { PrismaSessionCheck, type SessionCheck } from "./auth/session-check";
 import { PrismaAuthRepository } from "../modules/auth/auth.repository";
 import { AuthService } from "../modules/auth/auth.service";
+import {
+  PrismaAppConfigReader,
+  type AppConfigReader,
+} from "../modules/app-config/app-config.reader";
+import { ConsoleMailer } from "../modules/mail/console-mailer";
+import type { Mailer } from "../modules/mail/mailer";
 import { InMemoryRateLimiter, type RateLimiter } from "./rate-limit/rate-limiter";
 
 export type { Logger };
@@ -24,6 +30,8 @@ export type Container = {
   tenantResolver: TenantResolver;
   rateLimiter: RateLimiter;
   sessionCheck: SessionCheck;
+  appConfigReader: AppConfigReader;
+  mailer: Mailer;
   services: { auth: AuthService };
 };
 
@@ -42,6 +50,8 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
   if (config.nodeEnv === "production" && !config.trustProxy) {
     logger.warn("TRUST_PROXY is false: client IP is unknown, so IP-based rate limits are disabled");
   }
+  const appConfigReader = overrides.appConfigReader ?? new PrismaAppConfigReader(prisma);
+  const mailer = overrides.mailer ?? new ConsoleMailer(logger, config.nodeEnv);
   return {
     config,
     prisma,
@@ -51,11 +61,19 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
     tenantResolver,
     rateLimiter: overrides.rateLimiter ?? new InMemoryRateLimiter(clock),
     sessionCheck: overrides.sessionCheck ?? new PrismaSessionCheck(prisma, logger),
+    appConfigReader,
+    mailer,
     services: overrides.services ?? {
       auth: new AuthService(
         new PrismaAuthRepository(prisma),
         { jwt: config.jwt, sessionTtlDays: config.sessionTtlDays },
         clock,
+        {
+          passwordResetTtlMinutes: config.passwordResetTtlMinutes,
+          appConfig: appConfigReader,
+          mailer,
+          logger,
+        },
       ),
     },
   };

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { RefreshToken, Session, User } from "@/generated/prisma/client";
+import type { PasswordResetToken, RefreshToken, Session, User } from "@/generated/prisma/client";
 import type {
   AuthRepository,
   NewUser,
@@ -12,6 +12,7 @@ export class FakeAuthRepository implements AuthRepository {
   users: User[] = [];
   sessions: Session[] = [];
   refreshTokens: RefreshToken[] = [];
+  resetTokens: PasswordResetToken[] = [];
 
   /** `now` stamps createdAt/lastUsedAt of sessions so tests can drive them with a fake clock. */
   constructor(private readonly now: () => Date = () => new Date()) {}
@@ -167,6 +168,53 @@ export class FakeAuthRepository implements AuthRepository {
         (s) => s.id === sessionId && s.tenantId === tenantId && s.userId === userId,
       ) ?? null,
     );
+  }
+
+  createResetToken(
+    tenantId: string,
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    this.resetTokens.push({
+      id: randomUUID(),
+      tenantId,
+      userId,
+      tokenHash,
+      expiresAt,
+      usedAt: null,
+      createdAt: this.now(),
+    });
+    return Promise.resolve();
+  }
+
+  invalidateResetTokens(tenantId: string, userId: string, now: Date): Promise<void> {
+    for (const t of this.resetTokens) {
+      if (t.tenantId === tenantId && t.userId === userId && t.usedAt === null) t.usedAt = now;
+    }
+    return Promise.resolve();
+  }
+
+  findResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | null> {
+    return Promise.resolve(this.resetTokens.find((t) => t.tokenHash === tokenHash) ?? null);
+  }
+
+  consumeResetToken(id: string, now: Date): Promise<boolean> {
+    const t = this.resetTokens.find((x) => x.id === id);
+    if (!t || t.usedAt !== null || t.expiresAt <= now) return Promise.resolve(false);
+    t.usedAt = now;
+    return Promise.resolve(true);
+  }
+
+  updatePassword(tenantId: string, userId: string, passwordHash: string, now: Date): Promise<void> {
+    const u = this.users.find((x) => x.tenantId === tenantId && x.id === userId);
+    if (u) {
+      u.passwordHash = passwordHash;
+      u.passwordChangedAt = now;
+      u.failedLoginCount = 0;
+      u.lockedUntil = null;
+    }
+    return Promise.resolve();
   }
 
   transaction<T>(fn: (repo: AuthRepository) => Promise<T>): Promise<T> {

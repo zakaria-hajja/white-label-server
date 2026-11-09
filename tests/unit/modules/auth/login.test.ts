@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetDeps } from "../../../helpers/fakes/reset-deps";
 import { FakeAuthRepository } from "../../../helpers/fakes/auth-repository.fake";
 import * as password from "@/core/auth/password";
 import { AppError } from "@/core/errors/app-error";
@@ -34,7 +35,7 @@ async function failMany(n: number) {
 beforeEach(async () => {
   now = new Date("2026-01-01T00:00:00Z");
   repo = new FakeAuthRepository();
-  service = new AuthService(repo, cfg, clock);
+  service = new AuthService(repo, cfg, clock, resetDeps);
   await service.register(TENANT, { email: "a@b.co", password: GOOD }, META);
   vi.restoreAllMocks();
 });

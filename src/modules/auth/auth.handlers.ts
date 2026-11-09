@@ -2,7 +2,13 @@ import { ok } from "@/core/http/envelope";
 import type { RouteContext } from "@/core/http/route";
 import { ipKey, type RateLimitRule } from "@/core/rate-limit/rate-limiter";
 import { AppError } from "@/core/errors/app-error";
-import type { LoginInput, RefreshInput, RegisterInput } from "./auth.schemas";
+import type {
+  ForgotPasswordInput,
+  LoginInput,
+  RefreshInput,
+  RegisterInput,
+  ResetPasswordInput,
+} from "./auth.schemas";
 
 type Ctx<B> = RouteContext<B, undefined, undefined, "required", "none">;
 
@@ -24,6 +30,22 @@ export const loginRateLimit: RateLimitRule[] = [
 
 export const refreshRateLimit: RateLimitRule[] = [
   { name: "refresh-ip", limit: 30, windowSeconds: 60, key: ({ ip }) => ipKey(ip) },
+];
+
+export const forgotPasswordRateLimit: RateLimitRule[] = [
+  // Not IP-scoped, so a distributed flood cannot spam one mailbox. body.email is already normalised.
+  {
+    name: "forgot-account",
+    limit: 3,
+    windowSeconds: 900,
+    key: ({ body, tenant }) =>
+      tenant ? `${tenant.tenantId}|${(body as ForgotPasswordInput).email}` : null,
+  },
+  { name: "forgot-ip", limit: 10, windowSeconds: 900, key: ({ ip }) => ipKey(ip) },
+];
+
+export const resetPasswordRateLimit: RateLimitRule[] = [
+  { name: "reset-ip", limit: 10, windowSeconds: 900, key: ({ ip }) => ipKey(ip) },
 ];
 
 type AuthedCtx<P = undefined> = RouteContext<undefined, undefined, P, "required", "required">;
@@ -49,6 +71,16 @@ export async function refreshHandler(c: Ctx<RefreshInput>): Promise<Response> {
 
 export async function logoutHandler(c: Ctx<RefreshInput>): Promise<Response> {
   await c.container.services.auth.logout(c.tenant, c.body.refreshToken);
+  return ok({}, { requestId: c.requestId });
+}
+
+export async function forgotPasswordHandler(c: Ctx<ForgotPasswordInput>): Promise<Response> {
+  await c.container.services.auth.forgotPassword(c.tenant, c.body.email);
+  return ok({}, { status: 202, requestId: c.requestId });
+}
+
+export async function resetPasswordHandler(c: Ctx<ResetPasswordInput>): Promise<Response> {
+  await c.container.services.auth.resetPassword(c.tenant, c.body.token, c.body.newPassword);
   return ok({}, { requestId: c.requestId });
 }
 
