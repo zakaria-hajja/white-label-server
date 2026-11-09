@@ -18,4 +18,35 @@ describe("createLogger", () => {
     expect(out.refreshToken).toBe("[Redacted]");
     expect(out.headers.authorization).toBe("[Redacted]");
   });
+
+  const capture = (obj: object) => {
+    const chunks: string[] = [];
+    const dest = new Writable({
+      write(chunk, _enc, cb) {
+        chunks.push(chunk.toString());
+        cb();
+      },
+    });
+    createLogger("info", dest).info(obj, "x");
+    return JSON.parse(chunks.join(""));
+  };
+
+  it("redacts nested request shapes", () => {
+    const out = capture({
+      req: {
+        headers: { authorization: "a", cookie: "c" },
+        body: { password: "p", newPassword: "n", refreshToken: "r" },
+      },
+      user: { passwordHash: "h" },
+      err: { token: "t" },
+    });
+    expect(out.req.headers).toEqual({ authorization: "[Redacted]", cookie: "[Redacted]" });
+    expect(out.req.body).toEqual({
+      password: "[Redacted]",
+      newPassword: "[Redacted]",
+      refreshToken: "[Redacted]",
+    });
+    expect(out.user.passwordHash).toBe("[Redacted]");
+    expect(out.err.token).toBe("[Redacted]");
+  });
 });
