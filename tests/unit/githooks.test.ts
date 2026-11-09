@@ -36,14 +36,20 @@ describe("commit-msg hook", () => {
     expect(runCommitMsg(msg).code).toBe(0);
   });
 
-  it.each(["wip", "Added stuff", "feat:x", "feat(Auth): x", "feat(my_mod): x", "feature: x", "feat: ", ""])(
-    "rejects %j",
-    (msg) => {
-      const r = runCommitMsg(msg);
-      expect(r.code).toBe(1);
-      expect(r.stderr).toContain("type(scope): summary");
-    },
-  );
+  it.each([
+    "wip",
+    "Added stuff",
+    "feat:x",
+    "feat(Auth): x",
+    "feat(my_mod): x",
+    "feature: x",
+    "feat: ",
+    "",
+  ])("rejects %j", (msg) => {
+    const r = runCommitMsg(msg);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("type(scope): summary");
+  });
 
   it("rejects a 73-char header and mentions the limit", () => {
     const r = runCommitMsg("feat: " + "a".repeat(67));
@@ -66,7 +72,9 @@ describe("pre-commit hook", () => {
 
 describe("pre-push hook", () => {
   it("refuses a push targeting remote main", () => {
-    const r = run("pre-push", ["origin", "url"], { input: "refs/heads/feat/x abc refs/heads/main def\n" });
+    const r = run("pre-push", ["origin", "url"], {
+      input: "refs/heads/feat/x abc refs/heads/main def\n",
+    });
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("main");
   });
@@ -101,9 +109,13 @@ describe("commit-msg hook: review fixes", () => {
 
 describe("check-commit-messages script", () => {
   it("fails when the range cannot be resolved", () => {
-    const r = spawnSync("sh", [resolve(__dirname, "../../scripts/check-commit-messages.sh"), "deadbeef".repeat(5), "HEAD"], {
-      encoding: "utf8",
-    });
+    const r = spawnSync(
+      "sh",
+      [resolve(__dirname, "../../scripts/check-commit-messages.sh"), "deadbeef".repeat(5), "HEAD"],
+      {
+        encoding: "utf8",
+      },
+    );
     expect(r.status).not.toBe(0);
   });
 });

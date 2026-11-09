@@ -14,3 +14,11 @@ export async function verifyPassword(passwordHash: string, password: string): Pr
     return false; // malformed hash
   }
 }
+
+// Precomputed with the same parameters; lets login paths spend equal time when the user does not exist.
+const DUMMY_HASH =
+  "$argon2id$v=19$m=19456,t=2,p=1$meJstR3DcU7CccFPV3cgew$ZACook2I8mBfPDYt08C3MMz4fRCISer/ASk0oy67d3o";
+
+export async function dummyVerify(password: string): Promise<void> {
+  await verifyPassword(DUMMY_HASH, password);
+}

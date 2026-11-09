@@ -8,10 +8,21 @@ import type { TenantResolver } from "./tenant/resolver";
 import { SharedTenantResolver } from "./tenant/shared-resolver";
 import { CachedTenantLookup } from "./tenant/tenant-cache";
 import { PrismaTenantLookup } from "./tenant/tenant.repository";
+import { PrismaSessionCheck, type SessionCheck } from "./auth/session-check";
+import { PrismaAuthRepository } from "../modules/auth/auth.repository";
+import { PrismaUsersRepository } from "../modules/users/users.repository";
+import { UsersService } from "../modules/users/users.service";
+import { AuthService } from "../modules/auth/auth.service";
+import {
+  PrismaAppConfigReader,
+  type AppConfigReader,
+} from "../modules/app-config/app-config.reader";
+import { ConsoleMailer } from "../modules/mail/console-mailer";
+import type { Mailer } from "../modules/mail/mailer";
+import { InMemoryRateLimiter, type RateLimiter } from "./rate-limit/rate-limiter";
 
 export type { Logger };
 
-// Task 8 adds rateLimiter and services.
 export type Container = {
   config: AppConfig;
   prisma: PrismaClient;
@@ -19,6 +30,11 @@ export type Container = {
   clock: Clock;
   tenantLookup: CachedTenantLookup;
   tenantResolver: TenantResolver;
+  rateLimiter: RateLimiter;
+  sessionCheck: SessionCheck;
+  appConfigReader: AppConfigReader;
+  mailer: Mailer;
+  services: { auth: AuthService; users: UsersService };
 };
 
 export function createContainer(config: AppConfig, overrides: Partial<Container> = {}): Container {
@@ -32,13 +48,37 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
     (config.mode === "dedicated"
       ? new DedicatedTenantResolver(tenantLookup, config)
       : new SharedTenantResolver(tenantLookup));
+  const logger = overrides.logger ?? createLogger(config.logLevel);
+  if (config.nodeEnv === "production" && !config.trustProxy) {
+    logger.warn("TRUST_PROXY is false: client IP is unknown, so IP-based rate limits are disabled");
+  }
+  const appConfigReader = overrides.appConfigReader ?? new PrismaAppConfigReader(prisma);
+  const mailer = overrides.mailer ?? new ConsoleMailer(logger, config.nodeEnv);
   return {
     config,
     prisma,
-    logger: overrides.logger ?? createLogger(config.logLevel),
+    logger,
     clock,
     tenantLookup,
     tenantResolver,
+    rateLimiter: overrides.rateLimiter ?? new InMemoryRateLimiter(clock),
+    sessionCheck: overrides.sessionCheck ?? new PrismaSessionCheck(prisma, logger),
+    appConfigReader,
+    mailer,
+    services: overrides.services ?? {
+      auth: new AuthService(
+        new PrismaAuthRepository(prisma),
+        { jwt: config.jwt, sessionTtlDays: config.sessionTtlDays },
+        clock,
+        {
+          passwordResetTtlMinutes: config.passwordResetTtlMinutes,
+          appConfig: appConfigReader,
+          mailer,
+          logger,
+        },
+      ),
+      users: new UsersService(new PrismaUsersRepository(prisma), clock),
+    },
   };
 }
 

@@ -47,8 +47,8 @@ model User {
   tenantId          String     @map("tenant_id") @db.Uuid
   email             String
   passwordHash      String     @map("password_hash")
-  firstName         String     @map("first_name")
-  lastName          String     @map("last_name")
+  firstName         String?    @map("first_name")
+  lastName          String?    @map("last_name")
   status            UserStatus @default(ACTIVE)
   failedLoginCount  Int        @default(0) @map("failed_login_count")
   lockedUntil       DateTime?  @map("locked_until")

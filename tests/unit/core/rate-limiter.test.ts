@@ -1,0 +1,44 @@
+import { describe, expect, it } from "vitest";
+import { InMemoryRateLimiter, ipKey } from "@/core/rate-limit/rate-limiter";
+
+function setup() {
+  let t = new Date("2026-01-01T00:00:00Z").getTime();
+  const limiter = new InMemoryRateLimiter({ now: () => new Date(t) });
+  return { limiter, advance: (ms: number) => (t += ms) };
+}
+
+describe("InMemoryRateLimiter", () => {
+  it("allows 5 hits, blocks the 6th with retryAfter > 0, resets after the window", () => {
+    const { limiter, advance } = setup();
+    for (let i = 0; i < 5; i++) expect(limiter.hit("k", 5, 60).allowed).toBe(true);
+    const blocked = limiter.hit("k", 5, 60);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.retryAfterSeconds).toBeGreaterThan(0);
+    advance(30_000);
+    expect(limiter.hit("k", 5, 60).retryAfterSeconds).toBe(30);
+    advance(30_000);
+    expect(limiter.hit("k", 5, 60).allowed).toBe(true);
+  });
+
+  it("keeps keys independent", () => {
+    const { limiter } = setup();
+    for (let i = 0; i < 5; i++) limiter.hit("a", 5, 60);
+    expect(limiter.hit("a", 5, 60).allowed).toBe(false);
+    expect(limiter.hit("b", 5, 60).allowed).toBe(true);
+  });
+
+  it("sweeps expired keys periodically", () => {
+    const { limiter, advance } = setup();
+    for (let i = 0; i < 100; i++) limiter.hit(`old${i}`, 1, 1);
+    advance(5000);
+    for (let i = 0; i < 500; i++) limiter.hit("live", 1000, 60);
+    expect((limiter as unknown as { buckets: Map<string, unknown> }).buckets.size).toBe(1);
+  });
+});
+
+describe("ipKey", () => {
+  it("returns null for an unknown ip, joins parts otherwise", () => {
+    expect(ipKey("unknown", "x")).toBeNull();
+    expect(ipKey("1.2.3.4", "a@b.co")).toBe("1.2.3.4:a@b.co");
+  });
+});
