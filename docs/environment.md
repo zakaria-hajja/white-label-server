@@ -1,8 +1,10 @@
 # Environment variables
 
 Configuration is read and validated once at startup (`src/core/config/env.ts`). Invalid or missing
-values fail fast with an error that names the offending variables, never their values. An empty
-string (`VAR=`) is treated as unset, so the default applies.
+values fail fast with an error that names the offending variables, never their values. For the optional
+variables, an empty string (`VAR=`) is treated as unset, so the default applies. The required
+variables (`DEPLOYMENT_MODE`, `DATABASE_URL`, `JWT_SECRET`) are not normalized: an empty value is
+invalid.
 
 | Var | Required when | Default | Allowed values / range | Notes |
 |---|---|---|---|---|

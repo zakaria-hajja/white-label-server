@@ -40,8 +40,6 @@ cp .env.example .env
 
 Then edit `.env`:
 
-- Set `DATABASE_URL` to `postgresql://postgres:postgres@localhost:5432/whitelabel_dev`. The example
-  file points at a database named `whitelabel`, which the init script does not create.
 - Replace `JWT_SECRET` with a random string of at least 32 characters (for example
   `openssl rand -base64 48`).
 - Leave `DEPLOYMENT_MODE=shared`, or switch to `dedicated` and set `DEDICATED_TENANT_SLUG`.
