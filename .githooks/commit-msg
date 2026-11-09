@@ -1,0 +1,23 @@
+#!/bin/sh
+# Enforces Conventional Commits headers: type(scope): summary, <= 72 chars.
+set -eu
+
+header=$(grep -v '^#' "$1" | head -n 1 || true)
+
+case "$header" in
+  "Merge "* | 'Revert "'* | "fixup! "* | "squash! "* | "amend! "*) exit 0 ;;
+esac
+
+fail() {
+  {
+    echo "commit-msg: $1"
+    echo "  got:      ${header:-<empty>}"
+    echo "  expected: type(scope): summary   (scope optional, lowercase kebab-case; header <= 72 chars)"
+    echo "  types:    feat fix refactor test docs chore ci perf build revert"
+  } >&2
+  exit 1
+}
+
+pattern='^(feat|fix|refactor|test|docs|chore|ci|perf|build|revert)(\([a-z0-9]+(-[a-z0-9]+)*\))?!?: [^ ].*$'
+printf '%s\n' "$header" | grep -Eq "$pattern" || fail "header does not match the format"
+[ "${#header}" -le 72 ] || fail "header is ${#header} chars; the limit is 72"

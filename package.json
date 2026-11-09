@@ -23,7 +23,8 @@
     "openapi:generate": "tsx scripts/generate-openapi.ts",
     "openapi:lint": "redocly lint openapi/openapi.yaml",
     "tenant": "tsx scripts/tenant.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
