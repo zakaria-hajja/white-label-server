@@ -178,6 +178,41 @@ describe("route()", () => {
     }
   });
 
+  it("resolves the tenant before validating the body", async () => {
+    const mk = (status: "ACTIVE" | "SUSPENDED" | "NONE") =>
+      setContainer(
+        createContainer(config, {
+          prisma: {} as PrismaClient,
+          logger: createLogger("silent"),
+          tenantResolver: {
+            resolve: async () => {
+              if (status === "NONE") throw new AppError("INVALID_CLIENT", "Unknown client");
+              if (status === "SUSPENDED") throw new AppError("TENANT_SUSPENDED", "suspended");
+              return { tenantId: "t1", slug: "acme", name: "Acme", source: "header" };
+            },
+            verifyStartup: async () => {},
+          },
+        }),
+      );
+    const h = route({
+      auth: "none",
+      tenant: "required",
+      body: z.object({ email: z.email() }),
+      handler: async () => Response.json({}),
+    });
+    const bad = () => post(JSON.stringify({ email: "nope" }));
+    mk("NONE");
+    const r1 = await h(bad(), ctx);
+    expect(r1.status).toBe(400);
+    expect((await envelope(r1)).error).toMatchObject({ code: "INVALID_CLIENT" });
+    mk("SUSPENDED");
+    const r2 = await h(bad(), ctx);
+    expect(r2.status).toBe(403);
+    expect((await envelope(r2)).error).toMatchObject({ code: "TENANT_SUSPENDED" });
+    mk("ACTIVE");
+    expect((await envelope(await h(bad(), ctx))).error).toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
   it("resolves the tenant only for tenant: required routes and logs its slug", async () => {
     const calls: unknown[] = [];
     const record = { tenantId: "t1", slug: "acme", name: "Acme", source: "header" } as const;

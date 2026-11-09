@@ -63,6 +63,14 @@ export function route<
     try {
       const container = getContainer();
       logger = container.logger.child({ requestId });
+      // Order: (rate limit: Task 8) -> tenant -> (auth: Task 8) -> input parsing.
+      if (def.tenant === "required") {
+        tenant = await container.tenantResolver.resolve({
+          clientId: req.headers.get(CLIENT_ID_HEADER),
+          tokenTenantId: null, // Task 8 passes the verified token's tenant
+        });
+      }
+      // Task 8 inserts authentication here (after tenant, before input parsing).
       const params = (def.params ? def.params.parse(await ctx.params) : undefined) as P;
       const url = new URL(req.url);
       const query = (
@@ -73,12 +81,6 @@ export function route<
           ? def.body.parse(await readJsonBody(req, container.config.maxBodyBytes))
           : undefined
       ) as B;
-      if (def.tenant === "required") {
-        tenant = await container.tenantResolver.resolve({
-          clientId: req.headers.get(CLIENT_ID_HEADER),
-          tokenTenantId: null, // Task 8 passes the verified token's tenant
-        });
-      }
       // The tenant type is guaranteed by the branch above; TS cannot see through T.
       const routeCtx = {
         req,
