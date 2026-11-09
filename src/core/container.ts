@@ -16,9 +16,15 @@ import { PrismaSettingsRepository } from "../modules/settings/settings.repositor
 import { SettingsService } from "../modules/settings/settings.service";
 import { AuthService } from "../modules/auth/auth.service";
 import {
+  CachedAppConfigReader,
   PrismaAppConfigReader,
-  type AppConfigReader,
 } from "../modules/app-config/app-config.reader";
+import { AppConfigService } from "../modules/app-config/app-config.service";
+import {
+  CachedFeatureFlags,
+  PrismaFlagSource,
+  type FeatureFlags,
+} from "../modules/app-config/feature-flags";
 import { ConsoleMailer } from "../modules/mail/console-mailer";
 import type { Mailer } from "../modules/mail/mailer";
 import { InMemoryRateLimiter, type RateLimiter } from "./rate-limit/rate-limiter";
@@ -34,9 +40,15 @@ export type Container = {
   tenantResolver: TenantResolver;
   rateLimiter: RateLimiter;
   sessionCheck: SessionCheck;
-  appConfigReader: AppConfigReader;
+  appConfigReader: CachedAppConfigReader;
+  featureFlags: FeatureFlags;
   mailer: Mailer;
-  services: { auth: AuthService; users: UsersService; settings: SettingsService };
+  services: {
+    auth: AuthService;
+    users: UsersService;
+    settings: SettingsService;
+    appConfig: AppConfigService;
+  };
 };
 
 export function createContainer(config: AppConfig, overrides: Partial<Container> = {}): Container {
@@ -54,7 +66,11 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
   if (config.nodeEnv === "production" && !config.trustProxy) {
     logger.warn("TRUST_PROXY is false: client IP is unknown, so IP-based rate limits are disabled");
   }
-  const appConfigReader = overrides.appConfigReader ?? new PrismaAppConfigReader(prisma);
+  const appConfigReader =
+    overrides.appConfigReader ??
+    new CachedAppConfigReader(new PrismaAppConfigReader(prisma, logger), clock);
+  const featureFlags =
+    overrides.featureFlags ?? new CachedFeatureFlags(new PrismaFlagSource(prisma), clock);
   const mailer = overrides.mailer ?? new ConsoleMailer(logger, config.nodeEnv);
   return {
     config,
@@ -66,6 +82,7 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
     rateLimiter: overrides.rateLimiter ?? new InMemoryRateLimiter(clock),
     sessionCheck: overrides.sessionCheck ?? new PrismaSessionCheck(prisma, logger),
     appConfigReader,
+    featureFlags,
     mailer,
     services: overrides.services ?? {
       auth: new AuthService(
@@ -81,6 +98,7 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
       ),
       users: new UsersService(new PrismaUsersRepository(prisma), clock),
       settings: new SettingsService(new PrismaSettingsRepository(prisma), appConfigReader),
+      appConfig: new AppConfigService(appConfigReader, featureFlags),
     },
   };
 }
