@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Node 24 (see `.nvmrc`; `package.json` enforces `>=24 <25`).
-- A Docker runtime, for example OrbStack or Docker Desktop, with the `docker compose` plugin.
+- Docker Desktop (`brew install --cask docker-desktop`, then open it once to accept the license). It provides `docker` and the `docker compose` plugin.
 
 ## 1. Install dependencies
 
@@ -57,7 +57,13 @@ Applies committed migrations (`prisma migrate deploy`). To author a new migratio
 
 ## 5. Seed data
 
-Seeding is coming in a later phase. `npm run db:seed` points at a script that does not exist yet.
+```bash
+npm run db:seed
+```
+
+Idempotent (safe to run repeatedly) and refused when `NODE_ENV=production`. In `shared` mode it
+creates tenants `acme` and `globex`; in `dedicated` mode only `DEDICATED_TENANT_SLUG`. Each tenant
+gets users `alice@shared.test` and `bob@shared.test` (password `Password123!`) and 25 catalog items.
 
 ## 6. Run the dev server
 
@@ -96,5 +102,21 @@ a human in their own terminal. It drops and re-migrates both test databases.
 
 ## Other scripts
 
-`openapi:generate`, `openapi:lint` and `tenant` are declared in `package.json` but their target
-files are not implemented yet; they arrive in later phases.
+`openapi:generate` and `openapi:lint` are declared in `package.json` but their target files are not
+implemented yet; they arrive in later phases.
+
+## Managing tenants
+
+There is no admin API; tenants are managed with a CLI (it reads `DATABASE_URL` from `.env`):
+
+```bash
+npm run tenant -- create --slug acme --name "Acme" [--config path.json]
+npm run tenant -- list
+npm run tenant -- set-status --slug acme --status SUSPENDED   # or ACTIVE
+npm run tenant -- set-config --slug acme --file cfg.json      # validated; bumps config version
+npm run tenant -- set-feature --slug acme --key catalog --enabled true
+```
+
+`create` writes a default application config and the `catalog` feature flag in one transaction.
+Output is JSON; errors print one line and exit 1. A running server notices status changes within
+30 s (tenant cache TTL). See [architecture.md](./architecture.md#tenant-resolution).
