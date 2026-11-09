@@ -12,6 +12,8 @@ import { PrismaSessionCheck, type SessionCheck } from "./auth/session-check";
 import { PrismaAuthRepository } from "../modules/auth/auth.repository";
 import { PrismaUsersRepository } from "../modules/users/users.repository";
 import { UsersService } from "../modules/users/users.service";
+import { PrismaSettingsRepository } from "../modules/settings/settings.repository";
+import { SettingsService } from "../modules/settings/settings.service";
 import { AuthService } from "../modules/auth/auth.service";
 import {
   PrismaAppConfigReader,
@@ -34,7 +36,7 @@ export type Container = {
   sessionCheck: SessionCheck;
   appConfigReader: AppConfigReader;
   mailer: Mailer;
-  services: { auth: AuthService; users: UsersService };
+  services: { auth: AuthService; users: UsersService; settings: SettingsService };
 };
 
 export function createContainer(config: AppConfig, overrides: Partial<Container> = {}): Container {
@@ -78,6 +80,7 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
         },
       ),
       users: new UsersService(new PrismaUsersRepository(prisma), clock),
+      settings: new SettingsService(new PrismaSettingsRepository(prisma), appConfigReader),
     },
   };
 }
