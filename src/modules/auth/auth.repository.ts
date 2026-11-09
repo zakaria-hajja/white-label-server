@@ -4,8 +4,8 @@ import type { PrismaClient } from "@/core/database/prisma";
 export type NewUser = {
   email: string;
   passwordHash: string;
-  firstName: string;
-  lastName: string;
+  firstName: string | null;
+  lastName: string | null;
 };
 
 export type SessionMeta = { userAgent: string | null; ip: string | null };

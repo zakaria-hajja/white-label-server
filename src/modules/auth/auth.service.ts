@@ -47,8 +47,8 @@ export class AuthService {
         user = await repo.createUser(ctx.tenantId, {
           email: input.email,
           passwordHash,
-          firstName: input.firstName ?? "",
-          lastName: input.lastName ?? "",
+          firstName: input.firstName ?? null,
+          lastName: input.lastName ?? null,
         });
       } catch (err) {
         if (isUniqueViolation(err)) throw new AppError("EMAIL_ALREADY_REGISTERED");
@@ -76,6 +76,8 @@ export class AuthService {
       throw new AppError("INVALID_CREDENTIALS");
     }
     if (!(await verifyPassword(user.passwordHash, input.password))) {
+      // An expired lock starts a fresh count (the guards above ruled out an active lock).
+      if (user.lockedUntil !== null) await this.repo.resetFailedLogins(ctx.tenantId, user.id);
       await this.repo.recordFailedLogin(
         ctx.tenantId,
         user.id,

@@ -75,6 +75,15 @@ describe("AuthService.login", () => {
     expect(repo.users[0]).toMatchObject({ failedLoginCount: 0, lockedUntil: null });
   });
 
+  it("starts a fresh count after the lock expires and does not re-lock", async () => {
+    await failMany(10);
+    now = new Date(now.getTime() + 15 * 60_000 + 1);
+    await failMany(1);
+    expect(repo.users[0]).toMatchObject({ failedLoginCount: 1, lockedUntil: null });
+    await service.login(TENANT, { email: "a@b.co", password: GOOD }, META);
+    expect(repo.users[0]).toMatchObject({ failedLoginCount: 0, lockedUntil: null });
+  });
+
   it("runs dummyVerify and returns INVALID_CREDENTIALS for an unknown email", async () => {
     const spy = vi.spyOn(password, "dummyVerify");
     const err = await service
