@@ -21,5 +21,10 @@ export const loginBody = z
   })
   .strict();
 
+const refreshTokenField = z.string().min(1).max(256);
+export const refreshBody = z.object({ refreshToken: refreshTokenField }).strict();
+export const logoutBody = refreshBody;
+
+export type RefreshInput = z.infer<typeof refreshBody>;
 export type RegisterInput = z.infer<typeof registerBody>;
 export type LoginInput = z.infer<typeof loginBody>;

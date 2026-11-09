@@ -1,12 +1,20 @@
 import { randomUUID } from "node:crypto";
-import type { Session, User } from "@/generated/prisma/client";
-import type { AuthRepository, NewUser, SessionMeta } from "@/modules/auth/auth.repository";
+import type { RefreshToken, Session, User } from "@/generated/prisma/client";
+import type {
+  AuthRepository,
+  NewUser,
+  RefreshTokenWithSession,
+  SessionMeta,
+} from "@/modules/auth/auth.repository";
 
 /** In-memory AuthRepository for unit tests. Unique (tenantId, email) is enforced like the DB would. */
 export class FakeAuthRepository implements AuthRepository {
   users: User[] = [];
   sessions: Session[] = [];
-  refreshTokens: { sessionId: string; tokenHash: string; expiresAt: Date }[] = [];
+  refreshTokens: RefreshToken[] = [];
+
+  /** `now` stamps createdAt/lastUsedAt of sessions so tests can drive them with a fake clock. */
+  constructor(private readonly now: () => Date = () => new Date()) {}
 
   findUserByEmail(tenantId: string, email: string): Promise<User | null> {
     return Promise.resolve(
@@ -71,8 +79,8 @@ export class FakeAuthRepository implements AuthRepository {
       userId,
       userAgent: meta.userAgent,
       ipAddress: meta.ip,
-      createdAt: new Date(),
-      lastUsedAt: new Date(),
+      createdAt: this.now(),
+      lastUsedAt: this.now(),
       expiresAt,
       revokedAt: null,
       revokedReason: null,
@@ -82,8 +90,83 @@ export class FakeAuthRepository implements AuthRepository {
   }
 
   createRefreshToken(sessionId: string, tokenHash: string, expiresAt: Date): Promise<void> {
-    this.refreshTokens.push({ sessionId, tokenHash, expiresAt });
+    this.refreshTokens.push({
+      id: randomUUID(),
+      sessionId,
+      tokenHash,
+      expiresAt,
+      usedAt: null,
+      createdAt: new Date(),
+    });
     return Promise.resolve();
+  }
+
+  findRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenWithSession | null> {
+    const token = this.refreshTokens.find((t) => t.tokenHash === tokenHash);
+    const session = token && this.sessions.find((s) => s.id === token.sessionId);
+    return Promise.resolve(token && session ? { token, session } : null);
+  }
+
+  claimRefreshToken(id: string, now: Date): Promise<boolean> {
+    const token = this.refreshTokens.find((t) => t.id === id);
+    if (!token || token.usedAt !== null) return Promise.resolve(false);
+    token.usedAt = now;
+    return Promise.resolve(true);
+  }
+
+  touchSession(tenantId: string, sessionId: string, now: Date): Promise<void> {
+    const s = this.sessions.find((x) => x.id === sessionId && x.tenantId === tenantId);
+    if (s) s.lastUsedAt = now;
+    return Promise.resolve();
+  }
+
+  revokeSession(tenantId: string, sessionId: string, reason: string, now: Date): Promise<void> {
+    const s = this.sessions.find((x) => x.id === sessionId && x.tenantId === tenantId);
+    if (s && s.revokedAt === null) {
+      s.revokedAt = now;
+      s.revokedReason = reason;
+    }
+    return Promise.resolve();
+  }
+
+  revokeAllSessions(
+    tenantId: string,
+    userId: string,
+    reason: string,
+    now: Date,
+    exceptSessionId?: string,
+  ): Promise<void> {
+    for (const s of this.sessions) {
+      if (s.tenantId === tenantId && s.userId === userId && s.revokedAt === null) {
+        if (s.id !== exceptSessionId) {
+          s.revokedAt = now;
+          s.revokedReason = reason;
+        }
+      }
+    }
+    return Promise.resolve();
+  }
+
+  listActiveSessions(tenantId: string, userId: string, now: Date): Promise<Session[]> {
+    return Promise.resolve(
+      this.sessions
+        .filter(
+          (s) =>
+            s.tenantId === tenantId &&
+            s.userId === userId &&
+            s.revokedAt === null &&
+            s.expiresAt > now,
+        )
+        .sort((a, b) => b.lastUsedAt.getTime() - a.lastUsedAt.getTime()),
+    );
+  }
+
+  findSession(tenantId: string, userId: string, sessionId: string): Promise<Session | null> {
+    return Promise.resolve(
+      this.sessions.find(
+        (s) => s.id === sessionId && s.tenantId === tenantId && s.userId === userId,
+      ) ?? null,
+    );
   }
 
   transaction<T>(fn: (repo: AuthRepository) => Promise<T>): Promise<T> {

@@ -30,3 +30,25 @@ export function toUserDto(user: UserLike): UserDto {
     createdAt: user.createdAt.toISOString(),
   };
 }
+
+export type SessionDto = {
+  id: string;
+  userAgent: string | null;
+  createdAt: string;
+  lastUsedAt: string;
+  current: boolean;
+};
+
+/** Explicit allowlist: never exposes ipAddress or token data. */
+export function toSessionDto(
+  session: { id: string; userAgent: string | null; createdAt: Date; lastUsedAt: Date },
+  currentSessionId: string,
+): SessionDto {
+  return {
+    id: session.id,
+    userAgent: session.userAgent,
+    createdAt: session.createdAt.toISOString(),
+    lastUsedAt: session.lastUsedAt.toISOString(),
+    current: session.id === currentSessionId,
+  };
+}

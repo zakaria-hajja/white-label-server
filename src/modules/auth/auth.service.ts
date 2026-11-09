@@ -1,14 +1,14 @@
 import { dummyVerify, hashPassword, verifyPassword } from "@/core/auth/password";
-import { signAccessToken } from "@/core/auth/jwt";
+import { signAccessToken, type JwtConfig } from "@/core/auth/jwt";
 import { generateOpaqueToken, hashToken } from "@/core/auth/tokens";
-import type { AppConfig } from "@/core/config/env";
 import { isUniqueViolation } from "@/core/database/prisma-errors";
 import { AppError } from "@/core/errors/app-error";
 import type { Clock } from "@/shared/clock";
 import type { TenantContext } from "@/core/tenant/tenant-context";
 import type { AuthRepository } from "./auth.repository";
 import type { LoginInput, RegisterInput } from "./auth.schemas";
-import { toUserDto, type UserDto } from "./user.dto";
+import { toSessionDto, toUserDto, type SessionDto, type UserDto } from "./user.dto";
+import type { AuthContext } from "@/core/auth/auth-context";
 
 export type TokenPair = {
   accessToken: string;
@@ -18,7 +18,7 @@ export type TokenPair = {
 };
 
 export type AuthServiceConfig = {
-  jwt: AppConfig["jwt"];
+  jwt: JwtConfig;
   sessionTtlDays: number;
 };
 
@@ -28,6 +28,7 @@ export type AuthResult = { user: UserDto; tokens: TokenPair };
 
 const MAX_FAILED_LOGINS = 10;
 const LOCK_MS = 15 * 60_000;
+const REUSE_GRACE_MS = 10_000;
 const DAY_MS = 86_400_000;
 const MAX_USER_AGENT = 512;
 
@@ -96,6 +97,75 @@ export class AuthService {
       user: toUserDto(user),
       tokens: await this.tokens(user.id, ctx, session, refreshToken, now),
     };
+  }
+
+  async refresh(ctx: TenantContext, refreshToken: string): Promise<TokenPair> {
+    const now = this.clock.now();
+    const invalid = () => new AppError("INVALID_REFRESH_TOKEN");
+    const tokenHash = hashToken(refreshToken);
+    const found = await this.repo.findRefreshTokenByHash(tokenHash);
+    if (!found) throw invalid();
+    const { token, session } = found;
+    // Another tenant's token is indistinguishable from an unknown one and never revokes anything.
+    if (session.tenantId !== ctx.tenantId) throw invalid();
+    if (session.revokedAt !== null || session.expiresAt <= now || token.expiresAt <= now) {
+      throw invalid();
+    }
+    const user = await this.repo.findUserById(ctx.tenantId, session.userId);
+    if (!user || user.status !== "ACTIVE") throw invalid();
+
+    const next = generateOpaqueToken();
+    const claimed = await this.repo.transaction(async (repo) => {
+      if (!(await repo.claimRefreshToken(token.id, now))) return false;
+      // The session's absolute lifetime is not extended.
+      await repo.createRefreshToken(session.id, hashToken(next), session.expiresAt);
+      await repo.touchSession(ctx.tenantId, session.id, now);
+      return true;
+    });
+    if (!claimed) {
+      const current = await this.repo.findRefreshTokenByHash(tokenHash);
+      const usedAt = current?.token.usedAt ?? null;
+      // Within the grace window this is a benign retry or race: reject, keep the session.
+      if (usedAt === null || now.getTime() - usedAt.getTime() >= REUSE_GRACE_MS) {
+        await this.repo.revokeSession(ctx.tenantId, session.id, "refresh_token_reuse", now);
+      }
+      throw invalid();
+    }
+    return this.tokens(user.id, ctx, session, next, now);
+  }
+
+  async logout(ctx: TenantContext, refreshToken: string): Promise<void> {
+    const found = await this.repo.findRefreshTokenByHash(hashToken(refreshToken));
+    if (!found || found.session.tenantId !== ctx.tenantId) return;
+    await this.repo.revokeSession(ctx.tenantId, found.session.id, "logout", this.clock.now());
+  }
+
+  async me(ctx: TenantContext, auth: AuthContext) {
+    const [user, session] = await Promise.all([
+      this.repo.findUserById(auth.tenantId, auth.userId),
+      this.repo.findSession(auth.tenantId, auth.userId, auth.sessionId),
+    ]);
+    if (!user || !session) throw new AppError("UNAUTHENTICATED");
+    return {
+      user: toUserDto(user),
+      tenant: { slug: ctx.slug, name: ctx.name },
+      session: { id: session.id, expiresAt: session.expiresAt.toISOString() },
+    };
+  }
+
+  async listSessions(ctx: TenantContext, auth: AuthContext): Promise<SessionDto[]> {
+    const sessions = await this.repo.listActiveSessions(
+      ctx.tenantId,
+      auth.userId,
+      this.clock.now(),
+    );
+    return sessions.map((s) => toSessionDto(s, auth.sessionId));
+  }
+
+  async revokeSession(ctx: TenantContext, auth: AuthContext, sessionId: string): Promise<void> {
+    const session = await this.repo.findSession(ctx.tenantId, auth.userId, sessionId);
+    if (!session) throw new AppError("NOT_FOUND");
+    await this.repo.revokeSession(ctx.tenantId, session.id, "user_revoked", this.clock.now());
   }
 
   private async createSession(

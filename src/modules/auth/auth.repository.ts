@@ -1,4 +1,4 @@
-import type { Prisma, Session, User } from "@/generated/prisma/client";
+import type { Prisma, RefreshToken, Session, User } from "@/generated/prisma/client";
 import type { PrismaClient } from "@/core/database/prisma";
 
 export type NewUser = {
@@ -9,6 +9,8 @@ export type NewUser = {
 };
 
 export type SessionMeta = { userAgent: string | null; ip: string | null };
+
+export type RefreshTokenWithSession = { token: RefreshToken; session: Session };
 
 export interface AuthRepository {
   findUserByEmail(tenantId: string, email: string): Promise<User | null>;
@@ -29,6 +31,26 @@ export interface AuthRepository {
     expiresAt: Date,
   ): Promise<Session>;
   createRefreshToken(sessionId: string, tokenHash: string, expiresAt: Date): Promise<void>;
+  /**
+   * RefreshToken has no tenantId column: it is tenant-owned through its Session, so callers must
+   * check `session.tenantId` against the request tenant.
+   */
+  findRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenWithSession | null>;
+  /** Atomically marks the token used. Returns false when it was already used (lost the race). */
+  claimRefreshToken(id: string, now: Date): Promise<boolean>;
+  touchSession(tenantId: string, sessionId: string, now: Date): Promise<void>;
+  /** Idempotent: an already revoked session keeps its original revokedAt and reason. */
+  revokeSession(tenantId: string, sessionId: string, reason: string, now: Date): Promise<void>;
+  revokeAllSessions(
+    tenantId: string,
+    userId: string,
+    reason: string,
+    now: Date,
+    exceptSessionId?: string,
+  ): Promise<void>;
+  /** Not revoked and not expired, newest lastUsedAt first. */
+  listActiveSessions(tenantId: string, userId: string, now: Date): Promise<Session[]>;
+  findSession(tenantId: string, userId: string, sessionId: string): Promise<Session | null>;
   /** Runs fn against a repository bound to one database transaction. */
   transaction<T>(fn: (repo: AuthRepository) => Promise<T>): Promise<T>;
 }
@@ -95,7 +117,75 @@ export class PrismaAuthRepository implements AuthRepository {
     await this.db.refreshToken.create({ data: { sessionId, tokenHash, expiresAt } });
   }
 
+  findRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenWithSession | null> {
+    return this.db.refreshToken
+      .findUnique({ where: { tokenHash }, include: { session: true } })
+      .then((row) => {
+        if (!row) return null;
+        const { session, ...token } = row;
+        return { token, session };
+      });
+  }
+
+  async claimRefreshToken(id: string, now: Date): Promise<boolean> {
+    const { count } = await this.db.refreshToken.updateMany({
+      where: { id, usedAt: null },
+      data: { usedAt: now },
+    });
+    return count === 1;
+  }
+
+  async touchSession(tenantId: string, sessionId: string, now: Date): Promise<void> {
+    await this.db.session.updateMany({
+      where: { id: sessionId, tenantId },
+      data: { lastUsedAt: now },
+    });
+  }
+
+  async revokeSession(
+    tenantId: string,
+    sessionId: string,
+    reason: string,
+    now: Date,
+  ): Promise<void> {
+    await this.db.session.updateMany({
+      where: { id: sessionId, tenantId, revokedAt: null },
+      data: { revokedAt: now, revokedReason: reason },
+    });
+  }
+
+  async revokeAllSessions(
+    tenantId: string,
+    userId: string,
+    reason: string,
+    now: Date,
+    exceptSessionId?: string,
+  ): Promise<void> {
+    await this.db.session.updateMany({
+      where: {
+        tenantId,
+        userId,
+        revokedAt: null,
+        ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}),
+      },
+      data: { revokedAt: now, revokedReason: reason },
+    });
+  }
+
+  listActiveSessions(tenantId: string, userId: string, now: Date): Promise<Session[]> {
+    return this.db.session.findMany({
+      where: { tenantId, userId, revokedAt: null, expiresAt: { gt: now } },
+      orderBy: { lastUsedAt: "desc" },
+    });
+  }
+
+  findSession(tenantId: string, userId: string, sessionId: string): Promise<Session | null> {
+    return this.db.session.findFirst({ where: { id: sessionId, tenantId, userId } });
+  }
+
   transaction<T>(fn: (repo: AuthRepository) => Promise<T>): Promise<T> {
+    // Already bound to a transaction: join it rather than opening an independent one.
+    if (this.db !== this.prisma) return fn(this);
     return this.prisma.$transaction((tx) => fn(new PrismaAuthRepository(this.prisma, tx)));
   }
 }
