@@ -18,7 +18,12 @@ export default defineConfig({
         extends: true,
         test: {
           name: "integration-shared",
+          // Plain *.test.ts under tests/integration runs in shared mode only;
+          // mode-specific files use the *.dedicated.test.ts suffix.
           include: ["tests/integration/**/*.test.ts"],
+          exclude: ["**/node_modules/**", "tests/integration/**/*.dedicated.test.ts"],
+          globalSetup: ["tests/setup/migrate.ts"],
+          setupFiles: ["tests/setup/integration.ts"],
           fileParallelism: false,
           env: {
             DEPLOYMENT_MODE: "shared",
@@ -31,7 +36,9 @@ export default defineConfig({
         extends: true,
         test: {
           name: "integration-dedicated",
-          include: ["tests/integration/**/*.test.ts"],
+          include: ["tests/integration/**/*.dedicated.test.ts"],
+          globalSetup: ["tests/setup/migrate.ts"],
+          setupFiles: ["tests/setup/integration.ts"],
           fileParallelism: false,
           env: {
             DEPLOYMENT_MODE: "dedicated",
