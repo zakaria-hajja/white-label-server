@@ -10,6 +10,8 @@ import { GET as authMe } from "@/app/api/v1/auth/me/route";
 import { GET as listSessions } from "@/app/api/v1/auth/sessions/route";
 import { DELETE as deleteSession } from "@/app/api/v1/auth/sessions/[id]/route";
 import { GET as getMe, PATCH as patchMe } from "@/app/api/v1/users/me/route";
+import { PATCH as patchPassword } from "@/app/api/v1/users/me/password/route";
+import { SEED_PASSWORD } from "../../../prisma/seed-data";
 import { GET as getSettings, PATCH as patchSettings } from "@/app/api/v1/settings/route";
 import { GET as listCatalog } from "@/app/api/v1/catalog/route";
 import { GET as getCatalog } from "@/app/api/v1/catalog/[id]/route";
@@ -48,7 +50,12 @@ type Row = {
   invoke: (c: Call, w: World) => Promise<Response>;
   /** Ids in the response body that must all be rows of the calling tenant. */
   owned?: (data: unknown) => Owned;
+  /** Password-hash guard: `own` is the caller's user id, `others` must never change. */
+  hashes?: (w: World) => { own: string; others: string[] };
 };
+
+const hashOf = async (id: string) =>
+  (await testPrisma().user.findUniqueOrThrow({ where: { id } })).passwordHash;
 
 const asObj = (d: unknown) => d as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -80,6 +87,22 @@ const ROWS: Row[] = [
     name: "PATCH users/me",
     invoke: (c) => patchMe(request("PATCH", "users/me", c, { firstName: "Patched" }), noParams),
     owned: (d) => ({ model: "user", ids: [asObj(d).id] }),
+  },
+  {
+    name: "PATCH users/me/password",
+    invoke: (c) =>
+      patchPassword(
+        request("PATCH", "users/me/password", c, {
+          currentPassword: SEED_PASSWORD,
+          newPassword: "another-pass-9",
+        }),
+        noParams,
+      ),
+    // Only the caller's own hash may change; the same-email user in the other tenant never does.
+    hashes: (w) => ({
+      own: w.acme.aliceId,
+      others: [w.globex.aliceId, w.globex.bobId, w.acme.bobId],
+    }),
   },
   {
     name: "GET settings",
@@ -139,14 +162,25 @@ beforeEach(async () => {
 describe("tenant isolation matrix", () => {
   describe.each(ROWS)("$name", (row) => {
     it("acme token + X-Client-Id globex -> 403 TENANT_MISMATCH", async () => {
+      const g = row.hashes?.(w);
+      const ids = g ? [g.own, ...g.others] : [];
+      const before = await Promise.all(ids.map(hashOf));
       const res = await row.invoke({ token: w.acmeAlice.accessToken, client: "globex" }, w);
       expect(res.status).toBe(403);
       expect((await envelope(res)).error?.code).toBe("TENANT_MISMATCH");
+      expect(await Promise.all(ids.map(hashOf))).toEqual(before);
     });
 
     it("acme token alone only returns acme data", async () => {
+      const g = row.hashes?.(w);
+      const ownBefore = g ? await hashOf(g.own) : "";
+      const othersBefore = g ? await Promise.all(g.others.map(hashOf)) : [];
       const res = await row.invoke({ token: w.acmeAlice.accessToken }, w);
       expect(res.status).toBe(200);
+      if (g) {
+        expect(await hashOf(g.own)).not.toBe(ownBefore);
+        expect(await Promise.all(g.others.map(hashOf))).toEqual(othersBefore);
+      }
       if (!row.owned) return;
       const { model, ids } = row.owned((await envelope(res)).data ?? (await res.clone().json()));
       expect(ids.length).toBeGreaterThan(0);

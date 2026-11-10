@@ -265,8 +265,17 @@ describe("response leakage", () => {
     // Fresh container: the app-config cache must not hide the missing row.
     setContainer(createContainer(config, { prisma: testPrisma() }));
     const res = await rec(await appConfig(req("GET", "app/config"), noParams), 500);
-    const body = (await res.json()) as { error: { code: string } };
+    const text = await res.clone().text();
+    const body = JSON.parse(text) as {
+      error: { code: string; message: string; details?: unknown };
+    };
     expect(body.error.code).toBe("INTERNAL_ERROR");
+    // The thrown error says "application configuration missing for tenant <id>"; none of it may leak.
+    expect(body.error.message).toBe("An unexpected error occurred");
+    expect(body.error).not.toHaveProperty("details");
+    expect(text).not.toContain("application configuration");
+    expect(text).not.toContain(acme.id);
+    expect(text).not.toContain("    at ");
     expect(res.headers.get("cache-control") ?? "").not.toMatch(/public/i);
   });
 
