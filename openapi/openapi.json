@@ -2164,7 +2164,7 @@
     },
     "/api/v1/users/me/password": {
       "patch": {
-        "description": "A wrong current password is INVALID_CREDENTIALS (401). On success every session of the user is revoked; sign in again.",
+        "description": "A wrong current password is INVALID_CREDENTIALS (401). On success every other session of the user is revoked; the caller's session and tokens stay valid.",
         "operationId": "usersChangePassword",
         "parameters": [
           {
