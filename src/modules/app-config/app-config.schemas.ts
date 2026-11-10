@@ -52,3 +52,16 @@ export const AppConfigDocumentSchema = z.object({
 });
 
 export type AppConfigDocument = z.infer<typeof AppConfigDocumentSchema>;
+
+/** Public (allowlisted) response of GET /app/config. Never includes internal fields. */
+export const PublicAppConfigSchema = z.object({
+  tenant: z.object({ slug: z.string(), name: z.string() }),
+  app: AppConfigDocumentSchema.shape.app,
+  features: z.record(z.string(), z.boolean()),
+  support: AppConfigDocumentSchema.shape.support,
+  legal: AppConfigDocumentSchema.shape.legal,
+  runtime: AppConfigDocumentSchema.shape.runtime,
+  branding: AppConfigDocumentSchema.shape.branding,
+});
+
+export type PublicAppConfig = z.infer<typeof PublicAppConfigSchema>;

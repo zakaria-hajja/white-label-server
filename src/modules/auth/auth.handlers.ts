@@ -1,5 +1,6 @@
 import { ok } from "@/core/http/envelope";
 import type { RouteContext } from "@/core/http/route";
+import { isUuid } from "@/core/validation/common";
 import { ipKey, type RateLimitRule } from "@/core/rate-limit/rate-limiter";
 import { AppError } from "@/core/errors/app-error";
 import type {
@@ -50,8 +51,6 @@ export const resetPasswordRateLimit: RateLimitRule[] = [
 
 type AuthedCtx<P = undefined> = RouteContext<undefined, undefined, P, "required", "required">;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 const meta = (c: Ctx<unknown>) => ({ userAgent: c.req.headers.get("user-agent"), ip: c.ip });
 
 export async function registerHandler(c: Ctx<RegisterInput>): Promise<Response> {
@@ -95,7 +94,7 @@ export async function listSessionsHandler(c: AuthedCtx): Promise<Response> {
 
 export async function revokeSessionHandler(c: AuthedCtx<{ id: string }>): Promise<Response> {
   // A malformed id is simply a session that does not exist, not a validation error.
-  if (!UUID_RE.test(c.params.id)) throw new AppError("NOT_FOUND");
+  if (!isUuid(c.params.id)) throw new AppError("NOT_FOUND");
   await c.container.services.auth.revokeSession(c.tenant, c.auth, c.params.id);
   return ok({}, { requestId: c.requestId });
 }
