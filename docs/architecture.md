@@ -135,6 +135,8 @@ erDiagram
         string tokenHash UK
         datetime expiresAt
         datetime usedAt "nullable"
+        uuid replacedById FK "nullable, self"
+        datetime supersededAt "nullable"
     }
     PasswordResetToken {
         uuid id PK
@@ -175,7 +177,8 @@ erDiagram
 ```
 
 A `Session` is the revocable unit (one per login); each refresh rotation adds a `RefreshToken` row to the
-same session and marks the previous one used. Ids are UUIDv7. `RefreshToken` has no tenant column: it is
+same session, marks the previous one used and links it to its successor (`replacedById`); a
+lost-response retry marks the unused successor `supersededAt` instead. Ids are UUIDv7. `RefreshToken` has no tenant column: it is
 reached only through its session, which is tenant-scoped.
 
 ## Tenant resolution
