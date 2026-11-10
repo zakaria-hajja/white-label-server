@@ -38,6 +38,18 @@ describe("AppConfigDocumentSchema", () => {
     "",
   ])("rejects linkBaseUrl %s", (u) => expect(withLink(u)).toBe(false));
 
+  it("requires runtime.defaultLanguage to be one of runtime.supportedLanguages", () => {
+    const runtime = (defaultLanguage: string, supportedLanguages: string[]) =>
+      AppConfigDocumentSchema.safeParse({
+        ...base,
+        runtime: { defaultLanguage, supportedLanguages, defaultTheme: "SYSTEM" },
+      });
+    expect(runtime("fr", ["en", "fr"]).success).toBe(true);
+    const bad = runtime("de", ["en", "fr"]);
+    expect(bad.success).toBe(false);
+    expect(bad.error?.issues[0]?.path).toEqual(["runtime", "defaultLanguage"]);
+  });
+
   it("rejects invalid legal url", () => {
     expect(
       AppConfigDocumentSchema.safeParse({
