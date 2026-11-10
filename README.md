@@ -61,6 +61,7 @@ Contributing rules (commit and branch conventions, hooks) are in [CLAUDE.md](./C
 | `npm run db:migrate` | `prisma migrate dev`: author a new migration |
 | `npm run db:deploy` | `prisma migrate deploy`: apply committed migrations |
 | `npm run db:seed` | Seed local data (refused in production) |
+| `npm run db:prune` | Delete dead refresh tokens, sessions and reset tokens (production job; see deployment guides) |
 | `npm run db:reset:test` | Drop and re-migrate both test databases (human only) |
 | `npm run openapi:generate` | Regenerate `openapi/openapi.json` from the Zod schemas |
 | `npm run openapi:lint` | Lint the spec with Redocly |

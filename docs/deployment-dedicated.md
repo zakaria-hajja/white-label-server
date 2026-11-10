@@ -66,6 +66,9 @@ backward compatible because Android apps pin the OpenAPI contract by tag ([api.m
 - Rate limits are per instance; swap in Redis behind `RateLimiter` if you run several instances.
 - Secret rotation: rotating `JWT_SECRET` invalidates all access tokens of this deployment only.
 - Database TLS (`sslmode=require`) and least-privilege roles.
+- Pruning: schedule `npm run db:prune` (from a source checkout of the release tag, like the tenant CLI) per
+  deployment database, e.g. daily; `DEPLOYMENT_MODE=dedicated` also needs `DEDICATED_TENANT_SLUG` set.
+  What it deletes: [deployment-shared.md](./deployment-shared.md#pruning-auth-data-npm-run-dbprune).
 - Suspension: `npm run tenant -- set-status --slug acme --status SUSPENDED` takes effect within 30 s (403
   `TENANT_SUSPENDED`).
 - Before adding a real mail provider (async sending, console mailer suppresses links in production):

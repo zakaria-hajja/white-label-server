@@ -19,6 +19,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:prune": "tsx scripts/prune.ts",
     "db:reset:test": "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/whitelabel_test_shared prisma migrate reset --force && DATABASE_URL=postgresql://postgres:postgres@localhost:5432/whitelabel_test_dedicated prisma migrate reset --force",
     "openapi:generate": "tsx scripts/generate-openapi.ts",
     "openapi:lint": "redocly lint openapi/openapi.json",

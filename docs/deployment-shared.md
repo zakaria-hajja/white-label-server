@@ -143,6 +143,29 @@ Limits live in memory in each instance, so with N instances the effective limit 
   tables, so they use their own superuser-owned test databases, not these roles.
 - Back up the database; there is no application-level export.
 
+## Pruning auth data (`npm run db:prune`)
+
+Refresh tokens, sessions and password reset tokens are never deleted by the app, so the tables grow with
+every login and refresh. Run the prune job periodically (daily is plenty) against each database. It is
+built for production, idempotent, safe while the API serves traffic, and prints what it deleted:
+
+- refresh tokens of revoked or expired sessions, used refresh tokens older than 1 day + the 10 s reuse
+  window, and superseded refresh tokens older than 1 day;
+- sessions revoked or expired more than 7 days ago (with their tokens);
+- password reset tokens used or expired more than 1 day ago.
+
+A deleted token presented later is simply unknown (401, nothing revoked), so no outcome changes. It covers
+all tenants of the database. Like the tenant CLI it is **not in the images**: run it from a source checkout
+of the same release tag (a cron job on an admin machine, or a scheduled one-off job), with the app role
+(it needs only `DELETE`) and the same variables the CLI needs:
+
+```bash
+git checkout <release-tag> && npm ci
+export DEPLOYMENT_MODE=shared JWT_SECRET=<any 32+ char value> \
+  DATABASE_URL='postgresql://whitelabel_app:PASSWORD@HOST:5432/whitelabel?sslmode=require'
+npm run db:prune   # {"deleted": {"refreshTokens": 120, "sessions": 8, "passwordResetTokens": 3}}
+```
+
 ## Before adding a real mail provider
 
 Forgot-password currently uses the console mailer: it only logs, and in production it **suppresses the
