@@ -4,6 +4,7 @@ import {
   AppConfigDocumentSchema,
   type AppConfigDocument,
 } from "@/modules/app-config/app-config.schemas";
+import { STARTER_FEATURE_KEYS } from "@/modules/app-config/feature-keys";
 import { SLUG_PATTERN, type TenantRecord } from "./tenant-context";
 
 export class TenantAdminError extends Error {
@@ -60,8 +61,8 @@ export class TenantAdminService {
       await tx.applicationConfiguration.create({
         data: { tenantId: created.id, configuration: config as Prisma.InputJsonValue },
       });
-      await tx.featureFlag.create({
-        data: { tenantId: created.id, key: "catalog", enabled: true },
+      await tx.featureFlag.createMany({
+        data: STARTER_FEATURE_KEYS.map((key) => ({ tenantId: created.id, key, enabled: true })),
       });
       return created;
     });
