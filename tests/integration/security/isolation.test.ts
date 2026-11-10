@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { envelope } from "../../helpers/http";
 import { resetDb, testPrisma } from "../../helpers/db";
+import { discoverRoutes } from "../../helpers/routes";
 import { loginAs, seedTwoTenants, type Login, type TenantActors } from "../../helpers/actors";
 import { signAccessToken } from "@/core/auth/jwt";
 import { loadConfig } from "@/core/config/env";
@@ -128,9 +129,15 @@ const ROWS: Row[] = [
 ];
 
 /** Operations addressed by an id of ANOTHER tenant's row: always 404, and the row is untouched. */
-const CROSS_ROWS: { name: string; invoke: (c: Call, w: World) => Promise<Response> }[] = [
+const CROSS_ROWS: {
+  name: string;
+  /** The operation exercised, as `METHOD /api/v1/path` (checked by the completeness test). */
+  route: string;
+  invoke: (c: Call, w: World) => Promise<Response>;
+}[] = [
   {
     name: "GET catalog/{globex item id}",
+    route: "GET /api/v1/catalog/{id}",
     invoke: (c, w) => {
       const id = w.globex.catalogIds[0] ?? "";
       return getCatalog(request("GET", `catalog/${id}`, c), idParams(id));
@@ -138,6 +145,7 @@ const CROSS_ROWS: { name: string; invoke: (c: Call, w: World) => Promise<Respons
   },
   {
     name: "DELETE auth/sessions/{globex session id}",
+    route: "DELETE /api/v1/auth/sessions/{id}",
     invoke: (c, w) =>
       deleteSession(
         request("DELETE", `auth/sessions/${w.globexAlice.sessionId}`, c),
@@ -145,6 +153,56 @@ const CROSS_ROWS: { name: string; invoke: (c: Call, w: World) => Promise<Respons
       ),
   },
 ];
+
+/**
+ * Tenant-required routes that are deliberately NOT in the matrix: they are public (no access token),
+ * so there is no token tenant to mismatch. Their tenant scoping is covered elsewhere:
+ * app/config in tests/integration/app-config, auth in tests/integration/auth and the refresh
+ * cross-tenant test at the end of this file.
+ */
+const PUBLIC_TENANT_ROUTES = new Set([
+  "GET /api/v1/app/config",
+  "POST /api/v1/auth/register",
+  "POST /api/v1/auth/login",
+  "POST /api/v1/auth/refresh",
+  "POST /api/v1/auth/logout",
+  "POST /api/v1/auth/forgot-password",
+  "POST /api/v1/auth/reset-password",
+]);
+
+/** "GET auth/me" -> "GET /api/v1/auth/me" */
+const rowRoute = (name: string) => name.replace(" ", " /api/v1/");
+
+describe("tenant isolation matrix completeness", () => {
+  it("covers every tenant-required route with a ROWS or CROSS_ROWS entry", async () => {
+    const covered = new Set([
+      ...ROWS.map((r) => rowRoute(r.name)),
+      ...CROSS_ROWS.map((r) => r.route),
+    ]);
+    const missing = (await discoverRoutes())
+      .filter((r) => r.handler.meta.tenant === "required" && !PUBLIC_TENANT_ROUTES.has(r.key))
+      .map((r) => r.key)
+      .filter((k) => !covered.has(k));
+    expect(missing).toEqual([]);
+  });
+
+  it("has no stale entries (every row and allowlisted route exists)", async () => {
+    const existing = new Set((await discoverRoutes()).map((r) => r.key));
+    const named = [
+      ...ROWS.map((r) => rowRoute(r.name)),
+      ...CROSS_ROWS.map((r) => r.route),
+      ...PUBLIC_TENANT_ROUTES,
+    ];
+    expect(named.filter((k) => !existing.has(k))).toEqual([]);
+  });
+
+  it("allowlists only public routes", async () => {
+    const authed = (await discoverRoutes()).filter(
+      (r) => PUBLIC_TENANT_ROUTES.has(r.key) && r.handler.meta.auth !== "none",
+    );
+    expect(authed.map((r) => r.key)).toEqual([]);
+  });
+});
 
 let w: World;
 beforeEach(async () => {

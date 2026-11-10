@@ -180,3 +180,8 @@ anything that builds schemas, and tests that import schemas first must import th
 - Integration: `tests/integration/catalog/catalog.test.ts` (two seeded tenants: pagination, search,
   filters, validation 400s, 404 for foreign ids, feature flag off) and `catalog.dedicated.test.ts`
   (works with no client header).
+- Isolation matrix: add a row for every new tenant-required operation to `ROWS` in
+  `tests/integration/security/isolation.test.ts` (and a `CROSS_ROWS` entry when it takes another
+  tenant's id). A completeness test discovers every route under `src/app/api/v1` and fails if a
+  tenant-required route has no entry. Only public routes (no access token) may go in
+  `PUBLIC_TENANT_ROUTES` instead, with a comment saying where their tenant scoping is tested.

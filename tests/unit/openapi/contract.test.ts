@@ -1,14 +1,10 @@
-import { readdirSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { DescribedRouteHandler } from "@/core/http/route";
+import { discoverRoutes as discoverAll, type RouteInfo } from "../../helpers/routes";
 import { ERROR_STATUS } from "@/core/errors/codes";
 import { buildOpenApiDocument } from "@/core/openapi/document";
 import { errorStatuses } from "@/core/openapi/components";
 import { operations } from "@/core/openapi/registry";
-
-const ROUTE_ROOT = join(process.cwd(), "src/app/api/v1");
-const METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE"] as const;
 
 // Routes that are deliberately not part of the contract.
 const EXCLUDED = new Set(["/api/v1/openapi.json"]);
@@ -24,43 +20,7 @@ const EXTRA_ERRORS: Record<string, number[]> = {
   "GET /api/v1/catalog": [404], // FEATURE_DISABLED
 };
 
-function walk(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? walk(join(dir, e.name)) : e.name === "route.ts" ? [join(dir, e.name)] : [],
-  );
-}
-
-const loaders = import.meta.glob<Record<string, unknown>>("/src/app/api/v1/**/route.ts");
-
-type RouteInfo = { key: string; path: string; method: string; handler: DescribedRouteHandler };
-
-async function discoverRoutes(): Promise<RouteInfo[]> {
-  const out: RouteInfo[] = [];
-  for (const file of walk(ROUTE_ROOT)) {
-    const rel = relative(join(process.cwd(), "src/app/api/v1"), file).split(sep);
-    const path =
-      "/api/v1/" +
-      rel
-        .slice(0, -1)
-        .join("/")
-        .replace(/\[(\w+)\]/g, "{$1}");
-    if (EXCLUDED.has(path)) continue;
-    const load = loaders[`/src/app/api/v1/${rel.join("/")}`];
-    if (!load) throw new Error(`glob missed ${file}`);
-    const mod = await load();
-    for (const method of METHODS) {
-      if (typeof mod[method] === "function") {
-        out.push({
-          key: `${method} ${path}`,
-          path,
-          method,
-          handler: mod[method] as DescribedRouteHandler,
-        });
-      }
-    }
-  }
-  return out;
-}
+const discoverRoutes = () => discoverAll(EXCLUDED);
 
 const doc = buildOpenApiDocument();
 type Operation = {
