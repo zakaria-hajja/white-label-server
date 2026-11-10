@@ -88,7 +88,8 @@ tenant: `npm run tenant -- set-feature --slug <slug> --key profile --enabled tru
   the copy on the PR's base branch (`scripts/check-breaking.sh`, which runs `oasdiff` in breaking mode
   in a pinned container). For stacked PRs the base is the branch below, so each PR is checked against
   what it lands on. If the base has no spec yet (an app backend's first PR), the check passes with a
-  notice. The specs never leave the CI runner.
+  notice; if the base ref can't be read at all, the step fails instead of skipping. The specs never
+  leave the CI runner.
   - oasdiff rates some changes this policy treats as breaking as informational or warnings: removing a
     response enum value (such as an error code), an optional response field, a request field, a
     non-success status, a response header or an `operationId`, and changing a request pattern.
