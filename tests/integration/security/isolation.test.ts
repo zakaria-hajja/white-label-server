@@ -305,6 +305,7 @@ describe("tenant isolation matrix", () => {
       noParams,
     );
     expect(res.status).toBe(401);
+    expect((await envelope(res)).error?.code).toBe("INVALID_REFRESH_TOKEN");
     const ok = await refresh(
       new Request("http://localhost/api/v1/auth/refresh", {
         method: "POST",
@@ -324,6 +325,7 @@ describe("tenant isolation matrix", () => {
     );
     const res = await getMe(request("GET", "users/me", { token: forged }), noParams);
     expect(res.status).toBe(401);
+    expect((await envelope(res)).error?.code).toBe("UNAUTHENTICATED");
   });
 
   it("a JWT {sub: globex user, tid: acme, sid: globex session} -> 401 (session tenant predicate)", async () => {
@@ -334,6 +336,7 @@ describe("tenant isolation matrix", () => {
     );
     const res = await getMe(request("GET", "users/me", { token: forged }), noParams);
     expect(res.status).toBe(401);
+    expect((await envelope(res)).error?.code).toBe("UNAUTHENTICATED");
     // Sanity: the same claims with globex's own tenant id are accepted, so only tid made it fail.
     const genuine = await signAccessToken(
       config.jwt,

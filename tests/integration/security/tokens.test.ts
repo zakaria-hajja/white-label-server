@@ -79,6 +79,8 @@ describe("token security", () => {
       iss: config.jwt.issuer,
       aud: config.jwt.audience,
     })}.`;
-    expect((await me(token)).status).toBe(401);
+    const res = await me(token);
+    expect(res.status).toBe(401);
+    expect((await envelope(res)).error?.code).toBe("UNAUTHENTICATED");
   });
 });

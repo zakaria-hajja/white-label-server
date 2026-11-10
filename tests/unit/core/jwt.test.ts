@@ -77,6 +77,17 @@ describe("access tokens", () => {
     await rejectsWith(verifyAccessToken(cfg, "garbage", now), "UNAUTHENTICATED");
   });
 
+  it("rejects a correctly signed token without exp (UNAUTHENTICATED)", async () => {
+    const noExp = await new SignJWT({ tid: claims.tid, sid: claims.sid })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject(claims.sub)
+      .setIssuer(cfg.issuer)
+      .setAudience(cfg.audience)
+      .setIssuedAt(now)
+      .sign(cfg.secret);
+    await rejectsWith(verifyAccessToken(cfg, noExp, now), "UNAUTHENTICATED");
+  });
+
   it("rejects HS512 tokens even with the right secret", async () => {
     const t = await new SignJWT({ ...claims })
       .setProtectedHeader({ alg: "HS512" })
