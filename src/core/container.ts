@@ -14,6 +14,8 @@ import { PrismaUsersRepository } from "../modules/users/users.repository";
 import { UsersService } from "../modules/users/users.service";
 import { PrismaSettingsRepository } from "../modules/settings/settings.repository";
 import { SettingsService } from "../modules/settings/settings.service";
+import { PrismaCatalogRepository } from "../modules/catalog/catalog.repository";
+import { CatalogService } from "../modules/catalog/catalog.service";
 import { AuthService } from "../modules/auth/auth.service";
 import {
   CachedAppConfigReader,
@@ -47,6 +49,7 @@ export type Container = {
     auth: AuthService;
     users: UsersService;
     settings: SettingsService;
+    catalog: CatalogService;
     appConfig: AppConfigService;
   };
 };
@@ -98,6 +101,7 @@ export function createContainer(config: AppConfig, overrides: Partial<Container>
       ),
       users: new UsersService(new PrismaUsersRepository(prisma), clock),
       settings: new SettingsService(new PrismaSettingsRepository(prisma), appConfigReader),
+      catalog: new CatalogService(new PrismaCatalogRepository(prisma)),
       appConfig: new AppConfigService(appConfigReader, featureFlags),
     },
   };
