@@ -400,7 +400,7 @@
                     "tokens": {
                       "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwMTk1MDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAxMDEifQ.c2lnbmF0dXJl",
                       "expiresIn": 900,
-                      "refreshToken": "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu",
+                      "refreshToken": "ZXhhbXBsZS1yZWZyZXNoLXRva2VuLW5vdC1yZWFsISE",
                       "tokenType": "Bearer"
                     },
                     "user": {
@@ -581,7 +581,7 @@
           "content": {
             "application/json": {
               "example": {
-                "refreshToken": "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu"
+                "refreshToken": "ZXhhbXBsZS1yZWZyZXNoLXRva2VuLW5vdC1yZWFsISE"
               },
               "schema": {
                 "additionalProperties": false,
@@ -867,7 +867,7 @@
           "content": {
             "application/json": {
               "example": {
-                "refreshToken": "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu"
+                "refreshToken": "ZXhhbXBsZS1yZWZyZXNoLXRva2VuLW5vdC1yZWFsISE"
               },
               "schema": {
                 "additionalProperties": false,
@@ -896,7 +896,7 @@
                     "tokens": {
                       "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwMTk1MDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAxMDEifQ.c2lnbmF0dXJl",
                       "expiresIn": 900,
-                      "refreshToken": "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu",
+                      "refreshToken": "ZXhhbXBsZS1yZWZyZXNoLXRva2VuLW5vdC1yZWFsISE",
                       "tokenType": "Bearer"
                     }
                   },
@@ -1115,7 +1115,7 @@
                     "tokens": {
                       "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwMTk1MDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAxMDEifQ.c2lnbmF0dXJl",
                       "expiresIn": 900,
-                      "refreshToken": "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu",
+                      "refreshToken": "ZXhhbXBsZS1yZWZyZXNoLXRva2VuLW5vdC1yZWFsISE",
                       "tokenType": "Bearer"
                     },
                     "user": {
@@ -1288,7 +1288,7 @@
             "application/json": {
               "example": {
                 "newPassword": "new-correct-horse-battery",
-                "token": "prt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu"
+                "token": "ZXhhbXBsZS1yZXNldC10b2tlbi1ub3QtYS1yZWFsLTE"
               },
               "schema": {
                 "additionalProperties": false,

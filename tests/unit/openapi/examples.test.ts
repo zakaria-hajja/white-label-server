@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import "@/core/openapi/registry";
 import type { ZodType } from "zod";
 import { ERROR_STATUS, type ErrorCode } from "@/core/errors/codes";
+import { generateOpaqueToken } from "@/core/auth/tokens";
 import { ErrorEnvelope } from "@/core/openapi/components";
 import { buildOpenApiDocument } from "@/core/openapi/document";
 import { operations, type OperationDef } from "@/core/openapi/registry";
+import { authBodyExamples, authFixtures } from "@/modules/auth/auth.examples";
 
 type Media = { schema: unknown; example?: unknown };
 type Operation = {
@@ -106,6 +108,13 @@ describe("OpenAPI examples", () => {
         expect(e.message, label(op)).toBe("Unknown client");
       }
     }
+  });
+
+  it("opaque token examples look like real tokens (32 random bytes, base64url)", () => {
+    const shape = (t: string) => ({ length: t.length, base64url: /^[A-Za-z0-9_-]+$/.test(t) });
+    const real = shape(generateOpaqueToken());
+    expect(shape(authFixtures.tokens.refreshToken)).toEqual(real);
+    expect(shape(authBodyExamples.resetPassword.token)).toEqual(real);
   });
 
   it("is deterministic: building the document twice gives identical examples", () => {
