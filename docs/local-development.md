@@ -120,3 +120,39 @@ npm run tenant -- set-feature --slug acme --key catalog --enabled true
 `create` writes a default application config and the `catalog` feature flag in one transaction.
 Output is JSON; errors print one line and exit 1. A running server notices status changes within
 30 s (tenant cache TTL). See [architecture.md](./architecture.md#tenant-resolution).
+
+## Docker
+
+One image serves both deployment modes; the mode comes from env (see [environment.md](environment.md)).
+The image runs as the non-root `node` user, contains no `.env` files, and listens on port 3000.
+
+```bash
+docker build -t whitelabel-api .                                    # runtime image (default target)
+docker build --target migrator -t whitelabel-api-migrator .        # Prisma CLI + migrations
+```
+
+Run migrations before rolling out the app (the runtime image deliberately has no Prisma CLI):
+
+```bash
+docker run --rm -e DATABASE_URL=... whitelabel-api-migrator        # runs `prisma migrate deploy`
+docker run -p 3000:3000 -e DEPLOYMENT_MODE=shared -e DATABASE_URL=... -e JWT_SECRET=... whitelabel-api
+```
+
+To try the whole stack locally (throwaway dev secrets, migrates `whitelabel_dev` first):
+
+```bash
+docker compose --profile app up --build        # API on :3000; set API_PORT=3100 if 3000 is taken
+docker compose --profile app down              # keeps the postgres volume
+```
+
+A dedicated instance with an unknown `DEDICATED_TENANT_SLUG` exits 1 at startup.
+
+## CI
+
+`.github/workflows/ci.yml` (job `ci`, on every PR and on push to `main`) runs against a `postgres:17`
+service: lint, typecheck, `prisma validate`, migrate the shared and dedicated test databases,
+`prisma migrate diff` (fails if `schema.prisma` has changes without a migration; uses
+`SHADOW_DATABASE_URL`), unit tests, shared and dedicated integration tests (tenant isolation and auth),
+OpenAPI regeneration with `git diff --exit-code openapi/` (fails on contract drift), OpenAPI lint,
+`next build`, and the commit message check. Run the drift check locally with `SHADOW_DATABASE_URL`
+pointing at an empty scratch database.

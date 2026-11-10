@@ -16,19 +16,34 @@ services:
       timeout: 3s
       retries: 10
 
-  # Built in Task 18; start with: docker compose --profile app up
-  api:
+  # Optional app stack (throwaway dev secrets only): docker compose --profile app up --build
+  migrate:
     profiles: ["app"]
-    build: .
+    build:
+      context: .
+      target: migrator
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/whitelabel_dev
+
+  api:
+    profiles: ["app"]
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/whitelabel_dev
       DEPLOYMENT_MODE: shared
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      JWT_SECRET: dev-only-jwt-secret-do-not-use-in-production-0123456789
     ports:
-      - "3000:3000"
+      - "${API_PORT:-3000}:3000"
 
 volumes:
   pgdata:
