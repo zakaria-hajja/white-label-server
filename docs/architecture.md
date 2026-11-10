@@ -317,6 +317,9 @@ Clients must serialize refreshes (single flight).
 
 **Rate limits** (in `auth.handlers.ts` and `users.handlers.ts`, evaluated by `route()` after input parsing; `429
 RATE_LIMITED` with `Retry-After`). IP rules use `ipKey`, which skips the rule when the IP is unknown.
+Rules run in list order and the first rejection stops evaluation, so every list puts its IP rules first:
+a blocked IP never creates body-keyed (email) buckets. The in-memory limiter holds at most 100,000 keys
+(`maxEntries`); at the cap it drops expired keys, then the oldest ones.
 
 | Rule name                 | Route                      | Limit / window | Key                 |
 | ------------------------- | -------------------------- | -------------- | ------------------- |
@@ -324,8 +327,8 @@ RATE_LIMITED` with `Retry-After`). IP rules use `ipKey`, which skips the rule wh
 | `login-ip`                | POST /auth/login           | 10 / 60 s      | IP                  |
 | `login-account`           | POST /auth/login           | 5 / 60 s       | tenant id + email   |
 | `refresh-ip`              | POST /auth/refresh         | 30 / 60 s      | IP                  |
-| `forgot-account`          | POST /auth/forgot-password | 3 / 15 min     | tenant id + email   |
 | `forgot-ip`               | POST /auth/forgot-password | 10 / 15 min    | IP                  |
+| `forgot-account`          | POST /auth/forgot-password | 3 / 15 min     | tenant id + email   |
 | `reset-ip`                | POST /auth/reset-password  | 10 / 15 min    | IP                  |
 | `change-password-account` | PATCH /users/me/password   | 5 / 15 min     | tenant id + user id |
 

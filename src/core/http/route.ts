@@ -119,6 +119,7 @@ export function route<
           : undefined
       ) as B;
       const ip = clientIp(req, container.config.trustProxy);
+      // Rules run in order and the first rejection stops evaluation (later rules are not hit).
       for (const rule of def.rateLimit ?? []) {
         const key = rule.key({ ip, body, tenant, auth });
         if (key === null) continue;

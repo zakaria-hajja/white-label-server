@@ -42,3 +42,41 @@ describe("ipKey", () => {
     expect(ipKey("1.2.3.4", "a@b.co")).toBe("1.2.3.4:a@b.co");
   });
 });
+
+describe("InMemoryRateLimiter entry cap", () => {
+  const size = (l: InMemoryRateLimiter) =>
+    (l as unknown as { buckets: Map<string, unknown> }).buckets.size;
+
+  it("defaults to 100_000 entries", () => {
+    const { limiter } = setup();
+    expect((limiter as unknown as { maxEntries: number }).maxEntries).toBe(100_000);
+  });
+
+  it("never holds more than maxEntries, evicting the oldest live key", () => {
+    const limiter = new InMemoryRateLimiter({ now: () => new Date(0) }, { maxEntries: 3 });
+    for (const k of ["a", "b", "c", "d"]) limiter.hit(k, 1, 60);
+    expect(size(limiter)).toBe(3);
+    // "a" was evicted, so it starts a fresh bucket; "d" is still counted.
+    expect(limiter.hit("d", 1, 60).allowed).toBe(false);
+    expect(limiter.hit("a", 1, 60).allowed).toBe(true);
+    expect(size(limiter)).toBe(3);
+  });
+
+  it("evicts expired entries before live ones", () => {
+    let t = 0;
+    const limiter = new InMemoryRateLimiter({ now: () => new Date(t) }, { maxEntries: 3 });
+    limiter.hit("live1", 1, 60);
+    limiter.hit("short", 1, 1);
+    limiter.hit("live2", 1, 60);
+    t += 2000;
+    limiter.hit("new", 1, 60);
+    expect(size(limiter)).toBe(3);
+    // Both long-lived keys survived: their buckets are still exhausted.
+    expect(limiter.hit("live1", 1, 60).allowed).toBe(false);
+    expect(limiter.hit("live2", 1, 60).allowed).toBe(false);
+  });
+
+  it("rejects a non-positive cap", () => {
+    expect(() => new InMemoryRateLimiter({ now: () => new Date() }, { maxEntries: 0 })).toThrow();
+  });
+});

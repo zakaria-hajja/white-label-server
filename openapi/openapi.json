@@ -230,7 +230,7 @@
                 }
               }
             },
-            "description": "Too many requests. Possible codes: RATE_LIMITED. Limits (per instance): forgot-account: 3 per 900s; forgot-ip: 10 per 900s.",
+            "description": "Too many requests. Possible codes: RATE_LIMITED. Limits (per instance): forgot-ip: 10 per 900s; forgot-account: 3 per 900s.",
             "headers": {
               "Retry-After": {
                 "$ref": "#/components/headers/RetryAfter"
