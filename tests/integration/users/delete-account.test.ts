@@ -140,6 +140,13 @@ describe("DELETE /users/me", () => {
     expect(await userExists(alice.userId)).toBe(true);
   });
 
+  it("a double submit: both requests succeed, no 500", async () => {
+    const alice = await signup("alice@x.co");
+    const [a, b] = await Promise.all([del(alice.tokens), del(alice.tokens)]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(await userExists(alice.userId)).toBe(false);
+  });
+
   it("without a token -> 401 and nothing is deleted", async () => {
     const alice = await signup("alice@x.co");
     const res = await deleteMe(req("DELETE", { password: PASSWORD }), noParams);

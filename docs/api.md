@@ -114,7 +114,9 @@ Login and register return `tokens: {accessToken, refreshToken, tokenType: "Beare
     with their current password and send it as `{"password": "..."}` with `Content-Type:
     application/json`. On 200, clear the stored tokens and go to the auth screens; the old tokens no longer
     work. On 401 `INVALID_CREDENTIALS`, show "wrong password" and keep the user signed in. On 429, wait for
-    `Retry-After`. The deletion is permanent and cannot be undone.
+    `Retry-After`. The deletion is permanent and cannot be undone. A retry after a lost response returns
+    200 if it overlaps the first request, or 401 `UNAUTHENTICATED` once the account is gone; treat both as
+    deleted.
 
 ## Health
 

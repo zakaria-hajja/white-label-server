@@ -362,7 +362,10 @@ Register creates the user and the first session. Deleting the account (`DELETE /
 delete, confirmed with the current password (`401 INVALID_CREDENTIALS` otherwise, before anything is
 touched). A single `delete` of the user row relies on the schema's `onDelete: Cascade` relations to remove
 the user's sessions (and their refresh tokens), password reset tokens and settings, in one atomic
-statement. Catalog items, app config and flags are tenant-owned and untouched; there is no audit table.
+statement. The delete is conditional on what was verified: the same `passwordChangedAt` and a live
+caller session. A password change, reset or revocation that commits between the check and the delete
+wins (`401 INVALID_CREDENTIALS` or `401 UNAUTHENTICATED`, nothing deleted), and a concurrent duplicate
+request that finds the account already gone returns 200. Catalog items, app config and flags are tenant-owned and untouched; there is no audit table.
 Because every authenticated request checks the session in the database, the next request with the old
 access token is `401 UNAUTHENTICATED`, and the old refresh token is `401 INVALID_REFRESH_TOKEN`. The
 email is free to register again as a new account. There is no soft delete or recovery.

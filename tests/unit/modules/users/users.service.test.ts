@@ -176,7 +176,10 @@ describe("deleteMe", () => {
     const spy = vi.spyOn(repo, "deleteUser");
     await new UsersService(repo, clock).deleteMe(A, auth, { password: OLD });
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy).toHaveBeenCalledWith(A.tenantId, auth.userId);
+    expect(spy).toHaveBeenCalledWith(A.tenantId, auth.userId, {
+      passwordChangedAt: expect.any(Date),
+      sessionId: auth.sessionId,
+    });
     expect(authRepo.users).toHaveLength(0);
   });
 
@@ -197,5 +200,43 @@ describe("deleteMe", () => {
       ),
       "NOT_FOUND",
     );
+  });
+});
+
+describe("deleteMe races (the delete is conditional on what was verified)", () => {
+  /** findById returns the row as it was when the password was checked; the store moves on. */
+  function staleRead(mutate: () => void): UsersService {
+    const repo = new FakeUsersRepository(authRepo);
+    const original = repo.findById.bind(repo);
+    vi.spyOn(repo, "findById").mockImplementation(async (t, id) => {
+      const u = await original(t, id);
+      const snapshot = u ? { ...u } : null;
+      mutate();
+      return snapshot;
+    });
+    return new UsersService(repo, clock);
+  }
+
+  it("a password change that commits mid-delete wins: INVALID_CREDENTIALS, user kept", async () => {
+    const svc = staleRead(() => {
+      authRepo.users[0]!.passwordChangedAt = new Date(now.getTime() + 1000);
+    });
+    await rejects(svc.deleteMe(A, auth, { password: OLD }), "INVALID_CREDENTIALS");
+    expect(authRepo.users).toHaveLength(1);
+  });
+
+  it("the caller's session revoked mid-delete: UNAUTHENTICATED, user kept", async () => {
+    const svc = staleRead(() => {
+      authRepo.sessions[0]!.revokedAt = now;
+    });
+    await rejects(svc.deleteMe(A, auth, { password: OLD }), "UNAUTHENTICATED");
+    expect(authRepo.users).toHaveLength(1);
+  });
+
+  it("the account deleted mid-delete (a double submit) succeeds", async () => {
+    const svc = staleRead(() => {
+      authRepo.users.splice(0, 1);
+    });
+    await expect(svc.deleteMe(A, auth, { password: OLD })).resolves.toBeUndefined();
   });
 });

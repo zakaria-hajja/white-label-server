@@ -35,7 +35,15 @@ export class UsersService {
     if (!(await verifyPassword(user.passwordHash, input.password))) {
       throw new AppError("INVALID_CREDENTIALS");
     }
-    await this.repo.deleteUser(ctx.tenantId, user.id);
+    const guard = { passwordChangedAt: user.passwordChangedAt, sessionId: auth.sessionId };
+    if (await this.repo.deleteUser(ctx.tenantId, user.id, guard)) return;
+    // Nothing matched: something changed between the check and the delete.
+    const current = await this.repo.findById(ctx.tenantId, auth.userId);
+    if (!current) return; // already deleted, e.g. a double submit: the outcome the caller asked for
+    if (current.passwordChangedAt.getTime() !== user.passwordChangedAt.getTime()) {
+      throw new AppError("INVALID_CREDENTIALS"); // the password changed; the verified one is stale
+    }
+    throw new AppError("UNAUTHENTICATED"); // the caller's session was revoked meanwhile
   }
 
   async changePassword(
