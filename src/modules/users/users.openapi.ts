@@ -1,0 +1,41 @@
+import { SuccessEnvelope, registerOperation } from "@/core/openapi/components";
+import { TAGS } from "@/core/openapi/registry";
+import { EmptyEnvelope, User } from "../auth/auth.openapi";
+import { changePasswordRateLimit } from "./users.handlers";
+import { changePasswordBody, updateMeBody } from "./users.schemas";
+
+export const UserEnvelope = SuccessEnvelope("UserEnvelope", User);
+const base = { tag: TAGS.users, tenant: "required", auth: "required" } as const;
+
+registerOperation({
+  ...base,
+  method: "get",
+  path: "/api/v1/users/me",
+  operationId: "usersGetMe",
+  summary: "Get the current user's profile",
+  success: [{ status: 200, description: "The user", schema: UserEnvelope }],
+});
+
+registerOperation({
+  ...base,
+  method: "patch",
+  path: "/api/v1/users/me",
+  operationId: "usersUpdateMe",
+  summary: "Update the current user's profile",
+  description: "Send at least one of firstName, lastName; null clears a name.",
+  body: updateMeBody,
+  success: [{ status: 200, description: "The updated user", schema: UserEnvelope }],
+});
+
+registerOperation({
+  ...base,
+  method: "patch",
+  path: "/api/v1/users/me/password",
+  operationId: "usersChangePassword",
+  summary: "Change the current user's password",
+  description:
+    "A wrong current password is INVALID_CREDENTIALS (401). On success every session of the user is revoked; sign in again.",
+  body: changePasswordBody,
+  rateLimit: changePasswordRateLimit,
+  success: [{ status: 200, description: "Password changed", schema: EmptyEnvelope }],
+});

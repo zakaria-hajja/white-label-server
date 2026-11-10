@@ -1,4 +1,5 @@
 import { ok } from "@/core/http/envelope";
+import type { HealthDto } from "@/core/http/health";
 import { route } from "@/core/http/route";
 
 export const runtime = "nodejs";
@@ -11,10 +12,10 @@ export const GET = route({
   handler: async ({ container, requestId, logger }) => {
     try {
       await container.prisma.$queryRaw`SELECT 1`;
-      return ok({ status: "ok", db: "up" }, { requestId });
+      return ok<HealthDto>({ status: "ok", db: "up" }, { requestId });
     } catch (err) {
       logger.error({ err }, "health check: database unreachable");
-      return ok({ status: "degraded", db: "down" }, { status: 503, requestId });
+      return ok<HealthDto>({ status: "degraded", db: "down" }, { status: 503, requestId });
     }
   },
 });

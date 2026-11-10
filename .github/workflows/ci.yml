@@ -12,6 +12,27 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      # Throwaway CI-only literals; the integration projects set their own DATABASE_URL.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/whitelabel_test_shared
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/whitelabel_shadow
+      DEPLOYMENT_MODE: shared
+      JWT_SECRET: ci-only-jwt-secret-not-a-real-secret-0123456789
+      PGPASSWORD: postgres
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -25,7 +46,31 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - run: npx prisma validate
+
+      - name: Create databases
+        run: |
+          for db in whitelabel_test_shared whitelabel_test_dedicated whitelabel_shadow; do
+            psql -h localhost -U postgres -c "CREATE DATABASE $db"
+          done
+
+      - name: Migrate test databases
+        run: |
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/whitelabel_test_shared npx prisma migrate deploy
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/whitelabel_test_dedicated npx prisma migrate deploy
+
+      - name: Migrations match schema
+        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
+
       - run: npm run test:unit
+      - run: npm run test:int:shared
+      - run: npm run test:int:dedicated
+
+      - name: OpenAPI contract is up to date
+        run: npm run openapi:generate && git diff --exit-code openapi/
+
+      - run: npm run openapi:lint
+      - run: npm run build
 
       - name: Commit messages
         if: github.event_name == 'pull_request'

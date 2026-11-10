@@ -29,3 +29,11 @@ export const updateSettingsBody = z
 
 export type UpdateSettingsInput = z.infer<typeof updateSettingsBody>;
 export type Notifications = z.infer<typeof NotificationsSchema>;
+
+export const SettingsDtoSchema = z.object({
+  theme: ThemeSchema,
+  language: z.string(),
+  notifications: z.object({ push: z.boolean(), email: z.boolean(), marketing: z.boolean() }),
+});
+
+export type SettingsDto = z.infer<typeof SettingsDtoSchema>;

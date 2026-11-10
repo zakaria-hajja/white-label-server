@@ -7,19 +7,14 @@ import { AppError } from "@/core/errors/app-error";
 import type { Clock } from "@/shared/clock";
 import type { TenantContext } from "@/core/tenant/tenant-context";
 import type { AuthRepository } from "./auth.repository";
-import type { LoginInput, RegisterInput } from "./auth.schemas";
+import type { LoginInput, RegisterInput, TokenPair } from "./auth.schemas";
 import type { AppConfigReader } from "../app-config/app-config.reader";
 import type { Mailer } from "../mail/mailer";
 import { buildResetLink } from "./reset-link";
 import { toSessionDto, toUserDto, type SessionDto, type UserDto } from "./user.dto";
 import type { AuthContext } from "@/core/auth/auth-context";
 
-export type TokenPair = {
-  accessToken: string;
-  refreshToken: string;
-  tokenType: "Bearer";
-  expiresIn: number;
-};
+export type { TokenPair };
 
 export type AuthServiceConfig = {
   jwt: JwtConfig;

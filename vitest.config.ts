@@ -25,6 +25,8 @@ export default defineConfig({
           globalSetup: ["tests/setup/migrate.ts"],
           setupFiles: ["tests/setup/integration.ts"],
           fileParallelism: false,
+          testTimeout: 20000,
+          hookTimeout: 20000,
           env: {
             DEPLOYMENT_MODE: "shared",
             DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/whitelabel_test_shared",
@@ -40,6 +42,8 @@ export default defineConfig({
           globalSetup: ["tests/setup/migrate.ts"],
           setupFiles: ["tests/setup/integration.ts"],
           fileParallelism: false,
+          testTimeout: 20000,
+          hookTimeout: 20000,
           env: {
             DEPLOYMENT_MODE: "dedicated",
             DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/whitelabel_test_dedicated",

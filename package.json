@@ -21,7 +21,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset:test": "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/whitelabel_test_shared prisma migrate reset --force && DATABASE_URL=postgresql://postgres:postgres@localhost:5432/whitelabel_test_dedicated prisma migrate reset --force",
     "openapi:generate": "tsx scripts/generate-openapi.ts",
-    "openapi:lint": "redocly lint openapi/openapi.yaml",
+    "openapi:lint": "redocly lint openapi/openapi.json",
     "tenant": "tsx scripts/tenant.ts",
     "postinstall": "prisma generate",
     "prepare": "git config core.hooksPath .githooks || true"
@@ -40,6 +40,8 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@asteasolutions/zod-to-openapi": "9.1.0",
+    "@redocly/cli": "2.71.1",
     "@types/node": "24.19.2",
     "@types/pg": "8.23.1",
     "@types/react": "19.2.18",

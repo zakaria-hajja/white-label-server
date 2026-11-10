@@ -35,3 +35,14 @@ export type ResetPasswordInput = z.infer<typeof resetPasswordBody>;
 export type RefreshInput = z.infer<typeof refreshBody>;
 export type RegisterInput = z.infer<typeof registerBody>;
 export type LoginInput = z.infer<typeof loginBody>;
+
+export const TokenPairSchema = z.object({
+  accessToken: z.string().describe("JWT; send as `Authorization: Bearer <accessToken>`"),
+  refreshToken: z
+    .string()
+    .describe("Opaque, single-use; exchange at POST /auth/refresh for a new pair"),
+  tokenType: z.literal("Bearer"),
+  expiresIn: z.number().int().describe("Access token lifetime in seconds"),
+});
+
+export type TokenPair = z.infer<typeof TokenPairSchema>;
