@@ -122,22 +122,50 @@ export class AuthService {
     if (!user || user.status !== "ACTIVE") throw invalid();
 
     const next = generateOpaqueToken();
-    const claimed = await this.repo.transaction(async (repo) => {
-      if (!(await repo.claimRefreshToken(token.id, now))) return false;
+    const issue = async (repo: AuthRepository, replacedId: string) => {
       // The session's absolute lifetime is not extended.
-      await repo.createRefreshToken(session.id, hashToken(next), session.expiresAt);
+      const nextId = await repo.createRefreshToken(session.id, hashToken(next), session.expiresAt);
+      await repo.setRefreshTokenReplacement(replacedId, nextId);
       await repo.touchSession(ctx.tenantId, session.id, now);
-      return true;
-    });
-    if (!claimed) {
-      const current = await this.repo.findRefreshTokenByHash(tokenHash);
-      const usedAt = current?.token.usedAt ?? null;
-      // Within the grace window this is a benign retry or race: reject, keep the session.
-      if (usedAt === null || now.getTime() - usedAt.getTime() >= REUSE_GRACE_MS) {
-        await this.repo.revokeSession(ctx.tenantId, session.id, "refresh_token_reuse", now);
-      }
+    };
+
+    // (a) Normal rotation: claim the token and issue its successor in one transaction.
+    let current = token;
+    if (token.usedAt === null && token.supersededAt === null) {
+      const claimed = await this.repo.transaction(async (repo) => {
+        if (!(await repo.claimRefreshToken(token.id, now))) return false;
+        await issue(repo, token.id);
+        return true;
+      });
+      if (claimed) return this.tokens(user.id, ctx, session, next, now);
+      // Lost a race: decide from the token's committed state.
+      const reread = await this.repo.findRefreshTokenByHash(tokenHash);
+      if (!reread) throw invalid();
+      current = reread.token;
+    }
+
+    // (e) A superseded token was issued but replaced by a lost-response retry. Not evidence of
+    // theft: reject, keep the session.
+    if (current.supersededAt !== null || current.usedAt === null) throw invalid();
+
+    // (d) Reuse after the grace window: treat as theft and revoke the session.
+    if (now.getTime() - current.usedAt.getTime() >= REUSE_GRACE_MS) {
+      await this.repo.revokeSession(ctx.tenantId, session.id, "refresh_token_reuse", now);
       throw invalid();
     }
+
+    // (b) Retry within grace (the client lost the response): if the successor was never used,
+    // supersede it and hand out a fresh pair, so the session keeps exactly one live token.
+    const successorId = current.replacedById;
+    const reissued =
+      successorId !== null &&
+      (await this.repo.transaction(async (repo) => {
+        if (!(await repo.supersedeRefreshToken(successorId, now))) return false;
+        await issue(repo, current.id);
+        return true;
+      }));
+    // (c) The successor was already used or superseded (or we lost that race): reject, keep the session.
+    if (!reissued) throw invalid();
     return this.tokens(user.id, ctx, session, next, now);
   }
 

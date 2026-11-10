@@ -90,16 +90,19 @@ export class FakeAuthRepository implements AuthRepository {
     return Promise.resolve(s);
   }
 
-  createRefreshToken(sessionId: string, tokenHash: string, expiresAt: Date): Promise<void> {
+  createRefreshToken(sessionId: string, tokenHash: string, expiresAt: Date): Promise<string> {
+    const id = randomUUID();
     this.refreshTokens.push({
-      id: randomUUID(),
+      id,
       sessionId,
       tokenHash,
       expiresAt,
       usedAt: null,
-      createdAt: new Date(),
+      createdAt: this.now(),
+      replacedById: null,
+      supersededAt: null,
     });
-    return Promise.resolve();
+    return Promise.resolve(id);
   }
 
   findRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenWithSession | null> {
@@ -110,9 +113,26 @@ export class FakeAuthRepository implements AuthRepository {
 
   claimRefreshToken(id: string, now: Date): Promise<boolean> {
     const token = this.refreshTokens.find((t) => t.id === id);
-    if (!token || token.usedAt !== null) return Promise.resolve(false);
+    if (!token || token.usedAt !== null || token.supersededAt !== null) {
+      return Promise.resolve(false);
+    }
     token.usedAt = now;
     return Promise.resolve(true);
+  }
+
+  supersedeRefreshToken(id: string, now: Date): Promise<boolean> {
+    const token = this.refreshTokens.find((t) => t.id === id);
+    if (!token || token.usedAt !== null || token.supersededAt !== null) {
+      return Promise.resolve(false);
+    }
+    token.supersededAt = now;
+    return Promise.resolve(true);
+  }
+
+  setRefreshTokenReplacement(id: string, replacedById: string): Promise<void> {
+    const token = this.refreshTokens.find((t) => t.id === id);
+    if (token) token.replacedById = replacedById;
+    return Promise.resolve();
   }
 
   touchSession(tenantId: string, sessionId: string, now: Date): Promise<void> {

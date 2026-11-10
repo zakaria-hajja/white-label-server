@@ -294,13 +294,24 @@ after the access token expires. `lastUsedAt` is refreshed at most every 5 minute
 
 1. Look up by hash. Unknown, another tenant's, expired, or belonging to a revoked or expired session or
    a non-active user: `401 INVALID_REFRESH_TOKEN`. A token from another tenant never revokes anything.
-2. In one transaction, atomically claim the token (`usedAt` set only if still null), create the next
-   token (same session expiry) and touch the session. The new pair is returned.
-3. If the claim is lost (token already used): when it was used less than 10 s ago this is treated as
-   a benign retry or race: reject with `401`, keep the session. After the 10 s grace window it is
-   treated as theft: the session is revoked with reason `refresh_token_reuse` and `401` is returned.
+2. A superseded token (`supersededAt` set, see 4) is rejected with `401`; the session is kept (it was
+   issued but replaced, which is not evidence of theft).
+3. Unused token: in one transaction, atomically claim it (`usedAt` set only if it is still unused and
+   unsuperseded), create the successor S (same session expiry), set `replacedById = S` and touch the
+   session. S's pair is returned. A lost claim falls through to 4/5 using the token's committed state.
+4. Used less than 10 s ago (a lost-response retry or a race): if the successor S is still unused and
+   unsuperseded, atomically supersede it (`updateMany ... usedAt IS NULL AND supersededAt IS NULL`, count
+   1), create S2, point `replacedById` at S2 and return S2's pair. If S was already used or the supersede
+   loses a race, reject with `401` and keep the session.
+5. Used 10 s ago or more: treated as theft; the session is revoked with reason `refresh_token_reuse` and
+   `401` is returned.
 
-Clients must serialize refreshes (single flight).
+Invariant: a session has at most one live (unused, unsuperseded) refresh token, and it belongs to the
+last pair handed out; a replay within the grace window never revokes the session. Two simultaneous
+refreshes with one token may both return 200, but only the later pair works. Clients must still
+serialize refreshes (single flight). Trade-off: someone holding a stolen token who uses it within 10 s
+of the legitimate refresh, before the new token is used, gets the live pair and the legitimate client's
+pair is superseded (it gets `401` without revocation and the user signs in again).
 
 **Lockout and enumeration protections**
 
@@ -344,9 +355,6 @@ no rate limit of their own.
   `X-Forwarded-For` entry from the right (client-sent entries further left are ignored).
   Without it the IP is unknown and those rules are skipped (a warning is logged in production).
   Account-keyed rules still apply.
-- A refresh whose response is lost cannot be recovered: tokens are stored hashed, so the server cannot resend
-  the new pair, and the retry with the old token gets `INVALID_REFRESH_TOKEN` (the user signs in again;
-  after the 10 s grace the session is revoked). Accepted trade-off; see [api.md](./api.md#token-lifecycle).
 - Rate limits are in memory and per instance: with N instances the effective limit is up to N times
   higher. Account lockout is in the database and is not affected.
 - Forgot-password has a timing difference (an existing account does database writes and a mail send).

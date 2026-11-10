@@ -634,7 +634,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "description": "Refresh tokens are single-use. Reusing a spent token (after a short grace window) revokes the session.",
+        "description": "Refresh tokens are single-use. If a response is lost, retrying once with the old token within 10 s returns a fresh pair and supersedes the lost one (a superseded token gets 401 without revoking the session). Reusing a spent token after 10 s revokes the session.",
         "operationId": "authRefresh",
         "parameters": [
           {
