@@ -140,10 +140,16 @@ describe("DELETE /users/me", () => {
     expect(await userExists(alice.userId)).toBe(true);
   });
 
-  it("a double submit: both requests succeed, no 500", async () => {
+  it("a double submit: one 200, the other 200 or 401 (already gone), never a 500", async () => {
     const alice = await signup("alice@x.co");
-    const [a, b] = await Promise.all([del(alice.tokens), del(alice.tokens)]);
-    expect([a.status, b.status]).toEqual([200, 200]);
+    const responses = await Promise.all([del(alice.tokens), del(alice.tokens)]);
+    const outcomes = await Promise.all(
+      responses.map(async (r) => `${r.status} ${(await envelope(r)).error?.code ?? ""}`.trim()),
+    );
+    // Overlapping requests both pass the session check and both get 200; a request that arrives
+    // after the delete fails the session check with 401 UNAUTHENTICATED (docs/api.md).
+    expect(outcomes).toContain("200");
+    for (const o of outcomes) expect(["200", "401 UNAUTHENTICATED"]).toContain(o);
     expect(await userExists(alice.userId)).toBe(false);
   });
 
