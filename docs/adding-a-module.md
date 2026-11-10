@@ -2,6 +2,13 @@
 
 The catalog module (`src/modules/catalog`) is the reference. Copy it, rename, adjust.
 
+**Starter module or app module?** In an app's backend (see [creating-a-backend.md](./creating-a-backend.md)),
+every new route lives under **`src/app/api/v1/x/<feature>/`**, so it is served at `/api/v1/x/<feature>/…`
+and can never collide with a starter route. In the starter itself, routes never go under `x/`, and every
+new starter route must be added to `STARTER_ROUTES` in `src/core/contract/starter-routes.ts` (the
+namespace test fails otherwise). Starter routes are part of the shared contract; read
+[contract.md](./contract.md) first.
+
 ## File layout
 
 ```
@@ -11,7 +18,9 @@ src/modules/<name>/
   <name>.repository.ts   Repository interface + Prisma implementation
   <name>.service.ts      Business logic; takes a repository, returns DTOs
   <name>.handlers.ts     Thin HTTP layer (feature gate, rate-limit rules, envelope)
-src/app/api/v1/<name>/route.ts          route({...}) wiring only
+src/modules/<name>/<name>.examples.ts      Fixed fixtures + spec examples built by the real mappers
+src/modules/<name>/<name>.openapi.ts       OpenAPI registration (see below)
+src/app/api/v1/<name>/route.ts          route({...}) wiring only (app backends: src/app/api/v1/x/<name>/)
 src/app/api/v1/<name>/[id]/route.ts
 src/core/container.ts                   construct the service, add it to `services`
 tests/helpers/fakes/<name>-repository.fake.ts   in-memory repository for unit tests
@@ -153,10 +162,24 @@ be in it. Nothing is written by hand: the spec is built from the Zod schemas the
      tenant: "required",
      params: zIdParams, // the SAME schema objects the route uses
      success: [
-       { status: 200, description: "The item", schema: SuccessEnvelope("CatalogItemEnvelope", Item) },
+       {
+         status: 200,
+         description: "The item",
+         schema: SuccessEnvelope("CatalogItemEnvelope", Item),
+         example: catalogExamples.item, // from catalog.examples.ts
+       },
      ],
    });
    ```
+
+   Every success response needs an `example` (the full envelope) and every operation with a `body`
+   needs a `bodyExample` (registration throws without one). Build them in `<x>.examples.ts` from fixed
+   fixtures (`src/core/openapi/fixtures.ts` has `FIXTURE_IDS`, `FIXTURE_NOW`, `exampleEnvelope` and
+   `exampleError`) by calling the module's **real** mapper, never by writing the DTO out by hand, and
+   never with the clock or random values (the spec must regenerate byte-identically). If the DTO comes
+   from a service, extract its pure "build the DTO" step into an exported function and use that. Request
+   body examples are hand-written. The 400, 401 and 429 error examples are derived; a public operation
+   that can return 401 sets `errorExamples: { 401: ... }`.
 
    Use `SuccessEnvelope(name, dataSchema)` for single values and `PaginatedEnvelope(name, itemSchema)`
    for lists. `tests/unit/openapi/contract.test.ts` requires `auth`, `tenant`, `body`, `query`,
@@ -172,7 +195,9 @@ be in it. Nothing is written by hand: the spec is built from the Zod schemas the
 4. Add `import "@/modules/<x>/<x>.openapi";` to `src/core/openapi/document.ts`.
 
 5. Add a row to `tests/unit/openapi/dto-contract.test.ts`: run the real mapper/service output through
-   `ok()` and parse it with your envelope, so the spec cannot drift from the DTO.
+   `ok()` and parse it with your envelope, so the spec cannot drift from the DTO. Also add a case to its
+   "spec examples equal the real service output" block: feed the module's fixtures to the real service
+   (with its fake repository) and `toEqual` the example's `data`.
 
 6. `npm run openapi:generate`, then `npm run openapi:lint`; commit the regenerated
    `openapi/openapi.json` (CI fails on a diff; a unit test fails when it is stale).

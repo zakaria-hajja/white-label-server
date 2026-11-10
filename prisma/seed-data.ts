@@ -2,6 +2,7 @@ import { hashPassword } from "../src/core/auth/password";
 import type { PrismaClient } from "../src/core/database/prisma";
 import { TenantAdminService } from "../src/core/tenant/tenant-admin.service";
 import type { AppConfig } from "../src/core/config/env";
+import { STARTER_FEATURE_KEYS } from "../src/modules/app-config/feature-keys";
 
 export const SEED_PASSWORD = "Password123!";
 const CATEGORIES = ["Books", "Music", "Games", "Travel"];
@@ -25,7 +26,7 @@ function tenantsFor(config: Pick<AppConfig, "mode" | "dedicatedTenantSlug">): Te
   ];
 }
 
-/** Idempotent: tenants/users are upserted, catalog items are skipped when a tenant already has any. */
+/** Idempotent: tenants/users are upserted, missing starter flags are added, catalog items are skipped when a tenant already has any. */
 export async function seed(
   prisma: PrismaClient,
   config: Pick<AppConfig, "mode" | "dedicatedTenantSlug" | "nodeEnv">,
@@ -39,6 +40,12 @@ export async function seed(
   for (const { slug, name } of tenantsFor(config)) {
     const existing = await prisma.tenant.findUnique({ where: { slug } });
     const tenant = existing ?? (await admin.create({ slug, name }));
+
+    // Tenants seeded before a key existed get it switched on; existing flags are never flipped.
+    await prisma.featureFlag.createMany({
+      data: STARTER_FEATURE_KEYS.map((key) => ({ tenantId: tenant.id, key, enabled: true })),
+      skipDuplicates: true,
+    });
 
     for (const u of USERS) {
       await prisma.user.upsert({

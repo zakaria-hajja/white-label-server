@@ -117,7 +117,8 @@ npm run tenant -- set-config --slug acme --file cfg.json      # validated; bumps
 npm run tenant -- set-feature --slug acme --key catalog --enabled true
 ```
 
-`create` writes a default application config and the `catalog` feature flag in one transaction.
+`create` writes a default application config and the starter feature flags (`catalog`, `profile`, both
+on) in one transaction. `npm run db:seed` adds any starter flag a seeded tenant is missing.
 Output is JSON; errors print one line and exit 1. A running server notices status changes within
 30 s (tenant cache TTL). See [architecture.md](./architecture.md#tenant-resolution).
 

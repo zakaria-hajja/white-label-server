@@ -1,7 +1,8 @@
 # API guide
 
 Base path `/api/v1`. The machine-readable contract is [`openapi/openapi.json`](../openapi/openapi.json)
-(also served at `GET /api/v1/openapi.json`). This guide covers the behaviour that contract cannot express.
+(also served at `GET /api/v1/openapi.json`). This guide covers the behaviour that contract cannot express;
+what may change in it, and how, is in [contract.md](./contract.md).
 For how tenants and tokens work internally see [architecture.md](./architecture.md).
 
 ## Envelope
@@ -138,6 +139,20 @@ serves different tenants, so any CDN or proxy must key the cache on `X-Client-Id
 so). Clients may reuse a response for 60 s; server-side the document is cached up to 30 s more per instance,
 so config edits can take about 90 s to reach a client.
 
+## Feature flags
+
+`GET /app/config` returns `features`, a map of flag key → boolean. A key that is absent is off, so a
+client must treat an unknown or missing key as `false`.
+
+| Key | Gates | Where |
+| --- | --- | --- |
+| `catalog` | `GET /catalog`, `GET /catalog/{id}` | server: 404 `FEATURE_DISABLED` when off; hide the catalog UI too |
+| `profile` | the profile screen | client only: the server never gates `/users/me`, which sign-in and settings need |
+
+Home, settings and auth have no flag. New tenants get both keys switched on; operators toggle them with
+`npm run tenant -- set-feature`, and running servers pick changes up within 30 s (plus the 60 s client
+cache above). App backends may add their own keys.
+
 ## Rate limits
 
 Limits return 429 `RATE_LIMITED` with `Retry-After`. Rules (per instance, in memory) are listed in
@@ -176,13 +191,16 @@ request or response types.
    git submodule or by downloading the file at that ref:
    `https://raw.githubusercontent.com/<org>/<repo>/<tag>/openapi/openapi.json` (or a CI step that checks
    out the tag and copies `openapi/openapi.json`). Do not track `main`.
-2. Generate the client from that file with your generator of choice (for example OpenAPI Generator's
+2. Every operation in the spec has examples: the success response, the request body, and the 400,
+   401 and 429 error envelopes. They are computed from fixed fixtures by the server's real mappers, so
+   contract tests can decode them as real server output.
+3. Generate the client from that file with your generator of choice (for example OpenAPI Generator's
    Kotlin or Retrofit generator, or Ktor/Moshi variants) in a Gradle task; do not commit the generated
    code unless your policy requires it.
-3. `operationId`s are stable method names (`authLogin`, `authRefresh`, `catalogList`, `appConfigGet`, ...);
+4. `operationId`s are stable method names (`authLogin`, `authRefresh`, `catalogList`, `appConfigGet`, ...);
    renaming one is a breaking change for the client and must be treated as such in review.
-4. Upgrade deliberately: bump the pinned tag, regenerate, fix compile errors, test. CI here fails if the
+5. Upgrade deliberately: bump the pinned tag, regenerate, fix compile errors, test. CI here fails if the
    committed spec drifts from the code (`npm run openapi:generate` must produce no diff), so a spec at a
    tag always matches the code at that tag.
-5. Add the generated client's default headers: `X-Client-Id` (your tenant slug) and the bearer
+6. Add the generated client's default headers: `X-Client-Id` (your tenant slug) and the bearer
    interceptor with single-flight refresh as described above.

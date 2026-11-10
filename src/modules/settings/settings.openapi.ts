@@ -1,6 +1,7 @@
 import { SuccessEnvelope, registerOperation } from "@/core/openapi/components";
 import { registry, TAGS } from "@/core/openapi/registry";
 import { SettingsDtoSchema, updateSettingsBody } from "./settings.schemas";
+import { settingsBodyExample, settingsExamples } from "./settings.examples";
 
 export const SettingsEnvelope = SuccessEnvelope(
   "SettingsEnvelope",
@@ -15,7 +16,14 @@ registerOperation({
   operationId: "settingsGet",
   summary: "Get the user's settings",
   description: "Tenant defaults when the user has not saved any.",
-  success: [{ status: 200, description: "Settings", schema: SettingsEnvelope }],
+  success: [
+    {
+      status: 200,
+      description: "Settings",
+      schema: SettingsEnvelope,
+      example: settingsExamples.defaults,
+    },
+  ],
 });
 
 registerOperation({
@@ -28,5 +36,13 @@ registerOperation({
     "Partial update; send at least one field. `language` must be one of the tenant's supported languages " +
     "(see GET /app/config), otherwise VALIDATION_ERROR.",
   body: updateSettingsBody,
-  success: [{ status: 200, description: "The merged settings", schema: SettingsEnvelope }],
+  bodyExample: settingsBodyExample,
+  success: [
+    {
+      status: 200,
+      description: "The merged settings",
+      schema: SettingsEnvelope,
+      example: settingsExamples.stored,
+    },
+  ],
 });

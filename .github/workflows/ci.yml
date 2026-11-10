@@ -69,6 +69,31 @@ jobs:
       - name: OpenAPI contract is up to date
         run: npm run openapi:generate && git diff --exit-code openapi/
 
+      # Compares this PR's contract with the one on the branch it merges into. The base copy is
+      # written into the workspace (git-ignored) because the oasdiff container only mounts it.
+      - name: Base branch OpenAPI contract
+        id: base-spec
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: scripts/base-openapi.sh "origin/$BASE_REF" .oasdiff-base.json
+
+      - name: No breaking API changes
+        if: github.event_name == 'pull_request' && steps.base-spec.outputs.skip != 'true'
+        run: scripts/check-breaking.sh .oasdiff-base.json openapi/openapi.json
+
+      # The starter itself never serves routes under /api/v1/x/ (that namespace belongs to app
+      # backends, so the namespace unit test allows it). App backends inherit this step, but it
+      # only runs in the starter repo.
+      - name: Starter defines no app-namespace routes
+        if: github.repository == 'zakaria-hajja/white-label-server'
+        run: |
+          if [ -n "$(git ls-files 'src/app/api/v1/x/')" ]; then
+            echo "::error::the starter must not define routes under src/app/api/v1/x/ (see docs/contract.md)"
+            git ls-files 'src/app/api/v1/x/'
+            exit 1
+          fi
+
       - run: npm run openapi:lint
       - run: npm run build
 

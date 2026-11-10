@@ -91,7 +91,7 @@ describe("GET /app/config (shared)", () => {
   it("reflects a toggled flag after invalidate()", async () => {
     expect(
       ((await envelope(await call("acme"))).data as never as { features: object }).features,
-    ).toEqual({ catalog: true });
+    ).toEqual({ catalog: true, profile: true });
     await admin.setFeature("acme", "catalog", false);
     getContainer().featureFlags.invalidate();
     const after = await envelope(await call("acme"));

@@ -10,6 +10,39 @@ import {
   type UpdateSettingsInput,
 } from "./settings.schemas";
 
+type StoredSettings = { theme: string; language: string; notificationPreferences: unknown };
+type RuntimeDefaults = { defaultTheme: string; defaultLanguage: string };
+
+/**
+ * The settings DTO: the stored row when there is one, otherwise the tenant's defaults. Pure, so the
+ * OpenAPI examples are computed with it.
+ */
+export function buildSettingsDto(stored: StoredSettings, runtime?: RuntimeDefaults): SettingsDto;
+export function buildSettingsDto(stored: null, runtime: RuntimeDefaults): SettingsDto;
+export function buildSettingsDto(
+  stored: StoredSettings | null,
+  runtime?: RuntimeDefaults,
+): SettingsDto {
+  if (stored) {
+    return {
+      theme: ThemeSchema.parse(stored.theme),
+      language: stored.language,
+      notifications: NotificationsSchema.parse(
+        typeof stored.notificationPreferences === "object" &&
+          stored.notificationPreferences !== null
+          ? stored.notificationPreferences
+          : {},
+      ),
+    };
+  }
+  if (!runtime) throw new Error("buildSettingsDto: runtime defaults are required without a row");
+  return {
+    theme: ThemeSchema.parse(runtime.defaultTheme),
+    language: runtime.defaultLanguage,
+    notifications: NotificationsSchema.parse({}),
+  };
+}
+
 export class SettingsService {
   constructor(
     private readonly repo: SettingsRepository,
@@ -55,22 +88,8 @@ export class SettingsService {
 
   private async current(ctx: TenantContext, auth: AuthContext): Promise<SettingsDto> {
     const row = await this.repo.findForUser(ctx.tenantId, auth.userId);
-    if (row) {
-      return {
-        theme: row.theme,
-        language: row.language,
-        notifications: NotificationsSchema.parse(
-          typeof row.notificationPreferences === "object" && row.notificationPreferences !== null
-            ? row.notificationPreferences
-            : {},
-        ),
-      };
-    }
+    if (row) return buildSettingsDto(row);
     const { runtime } = await this.appConfig.getDocument(ctx.tenantId);
-    return {
-      theme: ThemeSchema.parse(runtime.defaultTheme),
-      language: runtime.defaultLanguage,
-      notifications: NotificationsSchema.parse({}),
-    };
+    return buildSettingsDto(null, runtime);
   }
 }

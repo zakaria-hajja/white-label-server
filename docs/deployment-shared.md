@@ -4,6 +4,19 @@ One or more identical API instances and one PostgreSQL database serve many tenan
 sends its tenant slug in `X-Client-Id` (see [api.md](./api.md#x-client-id-rules)). Background and diagrams:
 [architecture.md](./architecture.md).
 
+## When to choose shared mode
+
+Dedicated mode ([deployment-dedicated.md](./deployment-dedicated.md)) is the normal production shape:
+each app's backend has its own database, `JWT_SECRET`, domain and release cadence. Choose shared mode
+when:
+
+- you are developing locally (the seed creates tenants `acme` and `globex`);
+- you host several small apps cheaply from one deployment, and they can share a release cadence, a
+  database and its maintenance windows.
+
+All tenants of a shared deployment run the same code, so they must all be happy with the same starter
+version and the same app-specific modules.
+
 ## Configuration
 
 Set the variables in [environment.md](./environment.md). The minimum is:
@@ -59,7 +72,8 @@ npm run tenant -- set-feature --slug acme --key catalog --enabled true
 npm run tenant -- list
 ```
 
-`create` writes a default application config and the `catalog` flag in one transaction; slugs are 2 to 63
+`create` writes a default application config and the starter flags (`catalog`, `profile`, both on) in
+one transaction; slugs are 2 to 63
 lowercase letters, digits or hyphens. `--config` / `set-config` are validated against the app-config schema
 (including `passwordReset.linkBaseUrl`, the deep link base for reset emails) and bump the config version.
 Then ship the Android build with the shared base URL and `X-Client-Id=<slug>`. The CLI is a separate

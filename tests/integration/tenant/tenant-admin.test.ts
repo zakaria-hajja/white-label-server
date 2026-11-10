@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
-import { TenantAdminService } from "@/core/tenant/tenant-admin.service";
+import { TenantAdminService, defaultAppConfig } from "@/core/tenant/tenant-admin.service";
 import { seed } from "../../../prisma/seed-data";
 import { testPrisma } from "../../helpers/db";
 
@@ -19,7 +19,8 @@ describe("TenantAdminService", () => {
       passwordReset: { linkBaseUrl: "https://example.com/reset-password" },
     });
     const flags = await testPrisma().featureFlag.findMany({ where: { tenantId: t.id } });
-    expect(flags.map((f) => [f.key, f.enabled])).toEqual([["catalog", true]]);
+    const byKey = Object.fromEntries(flags.map((f) => [f.key, f.enabled]));
+    expect(byKey).toEqual({ catalog: true, profile: true });
   });
 
   it("create with a duplicate slug names the slug", async () => {
@@ -97,6 +98,32 @@ describe("seed", () => {
     expect(await p.tenant.count()).toBe(2);
     expect(await p.user.count()).toBe(4);
     expect(await p.catalogItem.count()).toBe(50);
+    expect(await p.featureFlag.count()).toBe(4);
+    for (const slug of ["acme", "globex"]) {
+      const flags = await p.featureFlag.findMany({ where: { tenant: { slug } } });
+      expect(Object.fromEntries(flags.map((f) => [f.key, f.enabled]))).toEqual({
+        catalog: true,
+        profile: true,
+      });
+    }
+  });
+
+  it("adds missing starter flags to a tenant seeded earlier, without flipping existing ones", async () => {
+    const p = testPrisma();
+    const acme = await p.tenant.create({ data: { slug: "acme", name: "Acme" } });
+    await p.applicationConfiguration.create({
+      data: { tenantId: acme.id, configuration: defaultAppConfig("Acme") },
+    });
+    await p.featureFlag.create({ data: { tenantId: acme.id, key: "catalog", enabled: false } });
+    await seed(p, cfg);
+    const flags = await p.featureFlag.findMany({ where: { tenantId: acme.id } });
+    expect(Object.fromEntries(flags.map((f) => [f.key, f.enabled]))).toEqual({
+      catalog: false,
+      profile: true,
+    });
+    expect(await p.featureFlag.count()).toBe(4);
+    expect(await p.tenant.count()).toBe(2);
+    expect(await p.applicationConfiguration.count()).toBe(2);
   });
 
   it("refuses in production", async () => {

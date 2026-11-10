@@ -2,9 +2,10 @@
 
 ## Overview
 
-A multi-tenant REST API (Next.js 16 route handlers, TypeScript, Prisma 7, PostgreSQL) for white-label
-mobile apps. Each client app (one Android build per brand) talks to the same code base; the contract is
-the committed [`openapi/openapi.json`](../openapi/openapi.json) (see [api.md](./api.md)).
+A multi-tenant REST API (Next.js 16 route handlers, TypeScript, Prisma 7, PostgreSQL) that is the
+starter for every app's backend (see [Role of this repo](#role-of-this-repo)). The contract is the
+committed [`openapi/openapi.json`](../openapi/openapi.json) (see [api.md](./api.md) and
+[contract.md](./contract.md)).
 
 One image runs in two modes, chosen by `DEPLOYMENT_MODE` at startup:
 
@@ -12,7 +13,8 @@ One image runs in two modes, chosen by `DEPLOYMENT_MODE` at startup:
   `X-Client-Id` (the tenant slug), and after login the tenant is the signed `tid` claim.
   See [deployment-shared.md](./deployment-shared.md).
 - **Dedicated:** one deployment (own database, `JWT_SECRET`, domain) serves exactly one tenant, fixed by
-  `DEDICATED_TENANT_SLUG`. See [deployment-dedicated.md](./deployment-dedicated.md).
+  `DEDICATED_TENANT_SLUG`. This is the normal production shape. See
+  [deployment-dedicated.md](./deployment-dedicated.md).
 
 ```mermaid
 flowchart LR
@@ -26,6 +28,26 @@ flowchart LR
       B1[Acme app] --> D1[api.acme.com<br/>DEDICATED_TENANT_SLUG=acme] --> DBA[(acme DB)]
       B2[Globex app] --> D2[api.globex.com<br/>DEDICATED_TENANT_SLUG=globex] --> DBG[(globex DB)]
     end
+```
+
+## Role of this repo
+
+This repo is **the backend starter**. Each app built from `android-starter-kit` gets its own backend:
+a repo cloned from this one, which keeps a `starter` remote and pulls updates by merging starter tags
+([creating-a-backend.md](./creating-a-backend.md)). The shared Android features call the starter's API
+directly, with no adapter layer, so that API is a shared dependency of every app and every backend made
+from it. `/api/v1` is extend-only, and app backends add their own endpoints under `/api/v1/x/`
+([contract.md](./contract.md)).
+
+Dedicated mode is the normal production shape. Shared mode is supported for local development and for
+running several small apps cheaply.
+
+```mermaid
+flowchart LR
+    S[backend-api<br/>the starter] -- "tag vX.Y.Z" --> A1[showcase-backend repo]
+    S -- "tag vX.Y.Z" --> A2[globex-backend repo]
+    A1 -- "git merge starter/vX.Y.Z" --> A1
+    S -- "openapi.json @ tag" --> AND[android-starter-kit<br/>shared features pin a tag]
 ```
 
 ## Folder structure

@@ -19,6 +19,7 @@ import {
   resetPasswordRateLimit,
 } from "./auth.handlers";
 import { SessionDtoSchema, UserDtoSchema } from "./user.dto";
+import { authBodyExamples, authErrorExamples, authExamples } from "./auth.examples";
 
 export const User = registry.register("UserDto", UserDtoSchema);
 const TokenPair = registry.register("TokenPair", TokenPairSchema);
@@ -54,9 +55,15 @@ registerOperation({
   summary: "Register a user and sign in",
   auth: "none",
   body: registerBody,
+  bodyExample: authBodyExamples.register,
   rateLimit: registerRateLimit,
   success: [
-    { status: 201, description: "User created; session started", schema: AuthResultEnvelope },
+    {
+      status: 201,
+      description: "User created; session started",
+      schema: AuthResultEnvelope,
+      example: authExamples.authResult,
+    },
   ],
   extraErrors: [409],
 });
@@ -71,9 +78,18 @@ registerOperation({
     "A wrong password, unknown email, disabled or locked account all return INVALID_CREDENTIALS.",
   auth: "none",
   body: loginBody,
+  bodyExample: authBodyExamples.login,
   rateLimit: loginRateLimit,
-  success: [{ status: 200, description: "Signed in", schema: AuthResultEnvelope }],
+  success: [
+    {
+      status: 200,
+      description: "Signed in",
+      schema: AuthResultEnvelope,
+      example: authExamples.authResult,
+    },
+  ],
   extraErrors: [401],
+  errorExamples: authErrorExamples.login,
 });
 
 registerOperation({
@@ -86,9 +102,18 @@ registerOperation({
     "Refresh tokens are single-use. If a response is lost, retrying once with the old token within 10 s returns a fresh pair and supersedes the lost one (a superseded token gets 401 without revoking the session). Reusing a spent token after 10 s revokes the session.",
   auth: "none",
   body: refreshBody,
+  bodyExample: authBodyExamples.refresh,
   rateLimit: refreshRateLimit,
-  success: [{ status: 200, description: "New token pair", schema: TokensEnvelope }],
+  success: [
+    {
+      status: 200,
+      description: "New token pair",
+      schema: TokensEnvelope,
+      example: authExamples.tokens,
+    },
+  ],
   extraErrors: [401],
+  errorExamples: authErrorExamples.refresh,
 });
 
 registerOperation({
@@ -99,7 +124,15 @@ registerOperation({
   summary: "Revoke the session of a refresh token",
   auth: "none",
   body: logoutBody,
-  success: [{ status: 200, description: "Session revoked (idempotent)", schema: EmptyEnvelope }],
+  bodyExample: authBodyExamples.logout,
+  success: [
+    {
+      status: 200,
+      description: "Session revoked (idempotent)",
+      schema: EmptyEnvelope,
+      example: authExamples.empty,
+    },
+  ],
 });
 
 registerOperation({
@@ -111,8 +144,11 @@ registerOperation({
   description: "Always 202, whether or not the email is registered.",
   auth: "none",
   body: forgotPasswordBody,
+  bodyExample: authBodyExamples.forgotPassword,
   rateLimit: forgotPasswordRateLimit,
-  success: [{ status: 202, description: "Accepted", schema: EmptyEnvelope }],
+  success: [
+    { status: 202, description: "Accepted", schema: EmptyEnvelope, example: authExamples.empty },
+  ],
 });
 
 registerOperation({
@@ -125,8 +161,16 @@ registerOperation({
     "An invalid, expired or used token is INVALID_RESET_TOKEN (400). All sessions are revoked.",
   auth: "none",
   body: resetPasswordBody,
+  bodyExample: authBodyExamples.resetPassword,
   rateLimit: resetPasswordRateLimit,
-  success: [{ status: 200, description: "Password changed", schema: EmptyEnvelope }],
+  success: [
+    {
+      status: 200,
+      description: "Password changed",
+      schema: EmptyEnvelope,
+      example: authExamples.empty,
+    },
+  ],
 });
 
 registerOperation({
@@ -136,7 +180,9 @@ registerOperation({
   operationId: "authMe",
   summary: "Current user, tenant and session",
   auth: "required",
-  success: [{ status: 200, description: "Current identity", schema: MeEnvelope }],
+  success: [
+    { status: 200, description: "Current identity", schema: MeEnvelope, example: authExamples.me },
+  ],
 });
 
 registerOperation({
@@ -146,7 +192,14 @@ registerOperation({
   operationId: "authSessionsList",
   summary: "List the user's active sessions",
   auth: "required",
-  success: [{ status: 200, description: "Active sessions", schema: SessionsEnvelope }],
+  success: [
+    {
+      status: 200,
+      description: "Active sessions",
+      schema: SessionsEnvelope,
+      example: authExamples.sessions,
+    },
+  ],
 });
 
 registerOperation({
@@ -157,5 +210,12 @@ registerOperation({
   summary: "Revoke one of the user's sessions",
   auth: "required",
   params: zIdParams,
-  success: [{ status: 200, description: "Session revoked", schema: EmptyEnvelope }],
+  success: [
+    {
+      status: 200,
+      description: "Session revoked",
+      schema: EmptyEnvelope,
+      example: authExamples.empty,
+    },
+  ],
 });

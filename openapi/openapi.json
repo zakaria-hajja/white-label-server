@@ -53,6 +53,47 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "app": {
+                      "displayName": "Showcase",
+                      "latestVersionCode": 7,
+                      "minSupportedVersionCode": 3
+                    },
+                    "branding": {
+                      "logoUrl": "https://example.com/logo.png",
+                      "primaryColor": "#3B5BDB"
+                    },
+                    "features": {
+                      "catalog": true,
+                      "profile": true
+                    },
+                    "legal": {
+                      "privacyPolicyUrl": "https://example.com/privacy",
+                      "termsUrl": "https://example.com/terms"
+                    },
+                    "runtime": {
+                      "defaultLanguage": "en",
+                      "defaultTheme": "SYSTEM",
+                      "supportedLanguages": [
+                        "en",
+                        "fr"
+                      ]
+                    },
+                    "support": {
+                      "email": "support@example.com",
+                      "url": "https://example.com/help"
+                    },
+                    "tenant": {
+                      "name": "Acme",
+                      "slug": "acme"
+                    }
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/AppConfigEnvelope"
                 }
@@ -80,6 +121,16 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "INVALID_CLIENT",
+                    "message": "A valid X-Client-Id header is required"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -145,6 +196,9 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "email": "alice@shared.test"
+              },
               "schema": {
                 "additionalProperties": false,
                 "properties": {
@@ -165,6 +219,13 @@
           "202": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {},
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/EmptyEnvelope"
                 }
@@ -180,6 +241,22 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -225,6 +302,16 @@
           "429": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "RATE_LIMITED",
+                    "message": "RATE_LIMITED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -278,6 +365,10 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "email": "alice@shared.test",
+                "password": "correct-horse-battery"
+              },
               "schema": {
                 "additionalProperties": false,
                 "properties": {
@@ -304,6 +395,28 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "tokens": {
+                      "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwMTk1MDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAxMDEifQ.c2lnbmF0dXJl",
+                      "expiresIn": 900,
+                      "refreshToken": "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu",
+                      "tokenType": "Bearer"
+                    },
+                    "user": {
+                      "createdAt": "2025-12-01T09:30:00.000Z",
+                      "email": "alice@shared.test",
+                      "firstName": "Alice",
+                      "id": "01950000-0000-7000-8000-000000000101",
+                      "lastName": "Anderson",
+                      "status": "ACTIVE"
+                    }
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/AuthResultEnvelope"
                 }
@@ -319,6 +432,22 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -334,6 +463,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "INVALID_CREDENTIALS",
+                    "message": "INVALID_CREDENTIALS"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -379,6 +518,16 @@
           "429": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "RATE_LIMITED",
+                    "message": "RATE_LIMITED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -431,6 +580,9 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "refreshToken": "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu"
+              },
               "schema": {
                 "additionalProperties": false,
                 "properties": {
@@ -453,6 +605,13 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {},
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/EmptyEnvelope"
                 }
@@ -468,6 +627,22 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -548,6 +723,30 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "session": {
+                      "expiresAt": "2026-01-30T18:45:00.000Z",
+                      "id": "01950000-0000-7000-8000-000000000201"
+                    },
+                    "tenant": {
+                      "name": "Acme",
+                      "slug": "acme"
+                    },
+                    "user": {
+                      "createdAt": "2025-12-01T09:30:00.000Z",
+                      "email": "alice@shared.test",
+                      "firstName": "Alice",
+                      "id": "01950000-0000-7000-8000-000000000101",
+                      "lastName": "Anderson",
+                      "status": "ACTIVE"
+                    }
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/MeEnvelope"
                 }
@@ -563,6 +762,16 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "INVALID_CLIENT",
+                    "message": "Unknown client"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -578,6 +787,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -647,6 +866,9 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "refreshToken": "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu"
+              },
               "schema": {
                 "additionalProperties": false,
                 "properties": {
@@ -669,6 +891,20 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "tokens": {
+                      "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwMTk1MDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAxMDEifQ.c2lnbmF0dXJl",
+                      "expiresIn": 900,
+                      "refreshToken": "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu",
+                      "tokenType": "Bearer"
+                    }
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/TokensEnvelope"
                 }
@@ -684,6 +920,22 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -699,6 +951,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "INVALID_REFRESH_TOKEN",
+                    "message": "INVALID_REFRESH_TOKEN"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -744,6 +1006,16 @@
           "429": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "RATE_LIMITED",
+                    "message": "RATE_LIMITED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -796,6 +1068,12 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "email": "alice@shared.test",
+                "firstName": "Alice",
+                "lastName": "Anderson",
+                "password": "correct-horse-battery"
+              },
               "schema": {
                 "additionalProperties": false,
                 "properties": {
@@ -832,6 +1110,28 @@
           "201": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "tokens": {
+                      "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwMTk1MDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAxMDEifQ.c2lnbmF0dXJl",
+                      "expiresIn": 900,
+                      "refreshToken": "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu",
+                      "tokenType": "Bearer"
+                    },
+                    "user": {
+                      "createdAt": "2025-12-01T09:30:00.000Z",
+                      "email": "alice@shared.test",
+                      "firstName": "Alice",
+                      "id": "01950000-0000-7000-8000-000000000101",
+                      "lastName": "Anderson",
+                      "status": "ACTIVE"
+                    }
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/AuthResultEnvelope"
                 }
@@ -847,6 +1147,22 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -907,6 +1223,16 @@
           "429": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "RATE_LIMITED",
+                    "message": "RATE_LIMITED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -960,6 +1286,10 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "newPassword": "new-correct-horse-battery",
+                "token": "prt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu"
+              },
               "schema": {
                 "additionalProperties": false,
                 "properties": {
@@ -988,6 +1318,13 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {},
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/EmptyEnvelope"
                 }
@@ -1003,6 +1340,22 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1048,6 +1401,16 @@
           "429": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "RATE_LIMITED",
+                    "message": "RATE_LIMITED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1101,6 +1464,30 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "sessions": [
+                      {
+                        "createdAt": "2025-12-20T08:00:00.000Z",
+                        "current": true,
+                        "id": "01950000-0000-7000-8000-000000000201",
+                        "lastUsedAt": "2025-12-31T18:45:00.000Z",
+                        "userAgent": "Showcase/1.0 (Android 15)"
+                      },
+                      {
+                        "createdAt": "2025-12-02T10:00:00.000Z",
+                        "current": false,
+                        "id": "01950000-0000-7000-8000-000000000202",
+                        "lastUsedAt": "2025-12-15T12:00:00.000Z",
+                        "userAgent": null
+                      }
+                    ]
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/SessionsEnvelope"
                 }
@@ -1116,6 +1503,16 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "INVALID_CLIENT",
+                    "message": "Unknown client"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1131,6 +1528,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1210,6 +1617,13 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {},
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/EmptyEnvelope"
                 }
@@ -1225,6 +1639,16 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "INVALID_CLIENT",
+                    "message": "Unknown client"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1240,6 +1664,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1380,6 +1814,38 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "category": "Music",
+                      "createdAt": "2025-12-10T12:00:00.000Z",
+                      "description": "Sample item 2 for Acme",
+                      "id": "01950000-0000-7000-8000-000000000301",
+                      "imageUrl": "https://example.com/items/2.png",
+                      "title": "Acme Item 2",
+                      "updatedAt": "2025-12-11T08:15:00.000Z"
+                    },
+                    {
+                      "category": null,
+                      "createdAt": "2025-12-05T12:00:00.000Z",
+                      "description": null,
+                      "id": "01950000-0000-7000-8000-000000000302",
+                      "imageUrl": null,
+                      "title": "Acme Item 1",
+                      "updatedAt": "2025-12-05T12:00:00.000Z"
+                    }
+                  ],
+                  "meta": {
+                    "pagination": {
+                      "page": 1,
+                      "pageSize": 20,
+                      "totalItems": 2,
+                      "totalPages": 1
+                    },
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/CatalogListEnvelope"
                 }
@@ -1395,6 +1861,22 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1410,6 +1892,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1505,6 +1997,21 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "category": "Music",
+                    "createdAt": "2025-12-10T12:00:00.000Z",
+                    "description": "Sample item 2 for Acme",
+                    "id": "01950000-0000-7000-8000-000000000301",
+                    "imageUrl": "https://example.com/items/2.png",
+                    "title": "Acme Item 2",
+                    "updatedAt": "2025-12-11T08:15:00.000Z"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/CatalogItemEnvelope"
                 }
@@ -1520,6 +2027,16 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "INVALID_CLIENT",
+                    "message": "Unknown client"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1535,6 +2052,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1617,6 +2144,16 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "db": "up",
+                    "status": "ok"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/HealthEnvelope"
                 }
@@ -1647,6 +2184,16 @@
           "503": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "db": "down",
+                    "status": "degraded"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/HealthEnvelope"
                 }
@@ -1683,6 +2230,21 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "language": "en",
+                    "notifications": {
+                      "email": true,
+                      "marketing": false,
+                      "push": true
+                    },
+                    "theme": "SYSTEM"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/SettingsEnvelope"
                 }
@@ -1698,6 +2260,16 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "INVALID_CLIENT",
+                    "message": "Unknown client"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1713,6 +2285,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1780,6 +2362,12 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "notifications": {
+                  "marketing": false
+                },
+                "theme": "DARK"
+              },
               "schema": {
                 "additionalProperties": false,
                 "properties": {
@@ -1822,6 +2410,21 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "language": "en",
+                    "notifications": {
+                      "email": true,
+                      "marketing": false,
+                      "push": false
+                    },
+                    "theme": "DARK"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/SettingsEnvelope"
                 }
@@ -1837,6 +2440,22 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1852,6 +2471,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1936,6 +2565,20 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "createdAt": "2025-12-01T09:30:00.000Z",
+                    "email": "alice@shared.test",
+                    "firstName": "Alice",
+                    "id": "01950000-0000-7000-8000-000000000101",
+                    "lastName": "Anderson",
+                    "status": "ACTIVE"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/UserEnvelope"
                 }
@@ -1951,6 +2594,16 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "INVALID_CLIENT",
+                    "message": "Unknown client"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -1966,6 +2619,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -2033,6 +2696,9 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "firstName": "Alicia"
+              },
               "schema": {
                 "additionalProperties": false,
                 "properties": {
@@ -2063,6 +2729,20 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {
+                    "createdAt": "2025-12-01T09:30:00.000Z",
+                    "email": "alice@shared.test",
+                    "firstName": "Alicia",
+                    "id": "01950000-0000-7000-8000-000000000101",
+                    "lastName": "Anderson",
+                    "status": "ACTIVE"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/UserEnvelope"
                 }
@@ -2078,6 +2758,22 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -2093,6 +2789,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -2177,6 +2883,10 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "currentPassword": "correct-horse-battery",
+                "newPassword": "new-correct-horse-battery"
+              },
               "schema": {
                 "additionalProperties": false,
                 "properties": {
@@ -2205,6 +2915,13 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "data": {},
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
                 "schema": {
                   "$ref": "#/components/schemas/EmptyEnvelope"
                 }
@@ -2220,6 +2937,22 @@
           "400": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -2235,6 +2968,16 @@
           "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
@@ -2280,6 +3023,16 @@
           "429": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "RATE_LIMITED",
+                    "message": "RATE_LIMITED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
