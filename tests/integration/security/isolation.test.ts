@@ -10,7 +10,7 @@ import { POST as refresh } from "@/app/api/v1/auth/refresh/route";
 import { GET as authMe } from "@/app/api/v1/auth/me/route";
 import { GET as listSessions } from "@/app/api/v1/auth/sessions/route";
 import { DELETE as deleteSession } from "@/app/api/v1/auth/sessions/[id]/route";
-import { GET as getMe, PATCH as patchMe } from "@/app/api/v1/users/me/route";
+import { DELETE as deleteMe, GET as getMe, PATCH as patchMe } from "@/app/api/v1/users/me/route";
 import { PATCH as patchPassword } from "@/app/api/v1/users/me/password/route";
 import { SEED_PASSWORD } from "../../../prisma/seed-data";
 import { GET as getSettings, PATCH as patchSettings } from "@/app/api/v1/settings/route";
@@ -104,6 +104,11 @@ const ROWS: Row[] = [
       own: w.acme.aliceId,
       others: [w.globex.aliceId, w.globex.bobId, w.acme.bobId],
     }),
+  },
+  {
+    name: "DELETE users/me",
+    invoke: (c) =>
+      deleteMe(request("DELETE", "users/me", c, { password: SEED_PASSWORD }), noParams),
   },
   {
     name: "GET settings",
@@ -283,6 +288,42 @@ describe("tenant isolation matrix", () => {
     expect(
       (await prisma.user.findUniqueOrThrow({ where: { id: w.globex.aliceId } })).firstName,
     ).toBe("Alice");
+  });
+
+  it("DELETE users/me with TENANT_MISMATCH deletes nothing", async () => {
+    const before = await testPrisma().user.count();
+    const res = await deleteMe(
+      request(
+        "DELETE",
+        "users/me",
+        { token: w.acmeAlice.accessToken, client: "globex" },
+        { password: SEED_PASSWORD },
+      ),
+      noParams,
+    );
+    expect(res.status).toBe(403);
+    expect(await testPrisma().user.count()).toBe(before);
+  });
+
+  it("acme alice deleting her account leaves globex alice and her session intact", async () => {
+    const res = await deleteMe(
+      request(
+        "DELETE",
+        "users/me",
+        { token: w.acmeAlice.accessToken },
+        { password: SEED_PASSWORD },
+      ),
+      noParams,
+    );
+    expect(res.status).toBe(200);
+    const prisma = testPrisma();
+    expect(await prisma.user.findUnique({ where: { id: w.acme.aliceId } })).toBeNull();
+    expect(await prisma.user.findUnique({ where: { id: w.globex.aliceId } })).not.toBeNull();
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: w.globexAlice.sessionId },
+    });
+    expect(session.revokedAt).toBeNull();
+    expect(await prisma.user.count({ where: { tenantId: w.acme.id } })).toBe(1);
   });
 
   it("acme alice's PATCH settings writes no globex settings", async () => {

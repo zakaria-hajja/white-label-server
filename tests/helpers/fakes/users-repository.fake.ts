@@ -34,6 +34,23 @@ export class FakeUsersRepository implements UsersRepository {
     return Promise.resolve();
   }
 
+  /** Mirrors the DB cascades: the user's sessions, their refresh tokens and reset tokens go too. */
+  deleteUser(tenantId: string, id: string): Promise<void> {
+    const i = this.users.findIndex((u) => u.tenantId === tenantId && u.id === id);
+    if (i === -1) return Promise.reject(new Error("no user"));
+    this.users.splice(i, 1);
+    const a = this.auth;
+    const gone = new Set(a.sessions.filter((s) => s.userId === id).map((s) => s.id));
+    a.sessions.splice(0, a.sessions.length, ...a.sessions.filter((s) => !gone.has(s.id)));
+    a.refreshTokens.splice(
+      0,
+      a.refreshTokens.length,
+      ...a.refreshTokens.filter((t) => !gone.has(t.sessionId)),
+    );
+    a.resetTokens.splice(0, a.resetTokens.length, ...a.resetTokens.filter((t) => t.userId !== id));
+    return Promise.resolve();
+  }
+
   transaction<T>(fn: (tx: UsersTx) => Promise<T>): Promise<T> {
     return fn({ users: this, sessions: this.auth });
   }

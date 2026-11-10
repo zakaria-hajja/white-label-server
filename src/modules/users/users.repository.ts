@@ -15,6 +15,8 @@ export interface UsersRepository {
   updateProfile(tenantId: string, id: string, data: ProfilePatch): Promise<User>;
   /** Sets the hash and passwordChangedAt. */
   updatePassword(tenantId: string, id: string, passwordHash: string, now: Date): Promise<void>;
+  /** Deletes the user; the schema's cascades remove sessions, refresh and reset tokens, settings. */
+  deleteUser(tenantId: string, id: string): Promise<void>;
   transaction<T>(fn: (tx: UsersTx) => Promise<T>): Promise<T>;
 }
 
@@ -44,6 +46,10 @@ export class PrismaUsersRepository implements UsersRepository {
       where: { tenantId_id: { tenantId, id } },
       data: { passwordHash, passwordChangedAt: now },
     });
+  }
+
+  async deleteUser(tenantId: string, id: string): Promise<void> {
+    await this.db.user.delete({ where: { tenantId_id: { tenantId, id } } });
   }
 
   transaction<T>(fn: (tx: UsersTx) => Promise<T>): Promise<T> {

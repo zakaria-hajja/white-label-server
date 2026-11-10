@@ -37,6 +37,7 @@ Every JSON response, including errors, uses one envelope and an `x-request-id` r
 | `DELETE /auth/sessions/{id}` | bearer | optional | revoke one of your sessions |
 | `GET /users/me`, `PATCH /users/me` | bearer | optional | profile; `firstName`/`lastName` are nullable |
 | `PATCH /users/me/password` | bearer | optional | body `{currentPassword, newPassword}`; revokes your other sessions |
+| `DELETE /users/me` | bearer | optional | body `{password}`; permanently deletes the account; 200 `{}`; wrong password 401 `INVALID_CREDENTIALS` |
 | `GET /settings`, `PATCH /settings` | bearer | optional | `theme` (`SYSTEM`, `LIGHT`, `DARK`), `language`, `notifications {push,email,marketing}` |
 | `GET /catalog`, `GET /catalog/{id}` | bearer | optional | needs the `catalog` feature flag (else 404 `FEATURE_DISABLED`) |
 
@@ -109,6 +110,11 @@ Login and register return `tokens: {accessToken, refreshToken, tokenType: "Beare
    defaults, branding, feature flags and version hints. Mind the caching below. (The password-reset link
    base URL is server-side only: it is used to build the emailed link and is not in the response.)
 9. Never treat `/health` as a JSON success check; see below.
+10. Delete account (`DELETE /users/me`, required by Play for apps with sign-up): ask the user to confirm
+    with their current password and send it as `{"password": "..."}` with `Content-Type:
+    application/json`. On 200, clear the stored tokens and go to the auth screens; the old tokens no longer
+    work. On 401 `INVALID_CREDENTIALS`, show "wrong password" and keep the user signed in. On 429, wait for
+    `Retry-After`. The deletion is permanent and cannot be undone.
 
 ## Health
 
