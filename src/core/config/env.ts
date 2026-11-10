@@ -15,6 +15,8 @@ export type AppConfig = {
   sessionTtlDays: number;
   passwordResetTtlMinutes: number;
   trustProxy: boolean;
+  /** Proxies we control in front of the app; the client IP is this many X-Forwarded-For entries from the right. */
+  trustProxyHops: number;
   logLevel: string;
   mailer: "console";
   maxBodyBytes: number;
@@ -44,6 +46,7 @@ const schema = z
     REFRESH_SESSION_TTL_DAYS: int(1, 365, 30),
     PASSWORD_RESET_TTL_MINUTES: int(5, 1440, 30),
     TRUST_PROXY: str(z.enum(["true", "false"]).default("false")),
+    TRUST_PROXY_HOPS: int(1, 20, 1),
     LOG_LEVEL: str(z.string().min(1).default("info")),
     MAILER: str(z.literal("console").default("console")),
     MAX_BODY_BYTES: int(1, 10_485_760, 65536),
@@ -86,6 +89,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     sessionTtlDays: v.REFRESH_SESSION_TTL_DAYS,
     passwordResetTtlMinutes: v.PASSWORD_RESET_TTL_MINUTES,
     trustProxy: v.TRUST_PROXY === "true",
+    trustProxyHops: v.TRUST_PROXY_HOPS,
     logLevel: v.LOG_LEVEL,
     mailer: v.MAILER,
     maxBodyBytes: v.MAX_BODY_BYTES,

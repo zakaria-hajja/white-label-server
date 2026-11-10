@@ -118,7 +118,7 @@ export function route<
           ? def.body.parse(await readJsonBody(req, container.config.maxBodyBytes))
           : undefined
       ) as B;
-      const ip = clientIp(req, container.config.trustProxy);
+      const ip = clientIp(req, container.config.trustProxy, container.config.trustProxyHops);
       // Rules run in order and the first rejection stops evaluation (later rules are not hit).
       for (const rule of def.rateLimit ?? []) {
         const key = rule.key({ ip, body, tenant, auth });

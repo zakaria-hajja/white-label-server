@@ -340,8 +340,9 @@ no rate limit of their own.
 
 - `POST /auth/register` returns `409 EMAIL_ALREADY_REGISTERED`, a known account-enumeration vector
   (a mobile UX trade-off); it is rate limited per IP.
-- IP-based limits only work with `TRUST_PROXY=true` behind a proxy that sets the client IP header;
-  otherwise the IP is unknown and those rules are skipped (a warning is logged in production).
+- IP-based limits only work with `TRUST_PROXY=true` behind a proxy; the client IP is the `TRUST_PROXY_HOPS`-th
+  `X-Forwarded-For` entry from the right (client-sent entries further left are ignored).
+  Without it the IP is unknown and those rules are skipped (a warning is logged in production).
   Account-keyed rules still apply.
 - A refresh whose response is lost cannot be recovered: tokens are stored hashed, so the server cannot resend
   the new pair, and the retry with the old token gets `INVALID_REFRESH_TOKEN` (the user signs in again;

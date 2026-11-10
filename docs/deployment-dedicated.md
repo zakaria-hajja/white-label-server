@@ -58,7 +58,11 @@ backward compatible because Android apps pin the OpenAPI contract by tag ([api.m
 
 ## Same as shared
 
-- `TRUST_PROXY=true` behind a proxy that overwrites `X-Forwarded-For`; without it IP rate limits are skipped.
+- `TRUST_PROXY=true` behind a proxy, with `TRUST_PROXY_HOPS` = the number of proxies you control that append
+  to `X-Forwarded-For` (AWS ALB: 1; GCP external LB: 2; nginx with `$proxy_add_x_forwarded_for`: 1 per
+  nginx; CDN + LB: 2). The client IP is read that many entries from the right, so client-sent entries are
+  ignored ([details](./deployment-shared.md#behind-a-proxy-trust_proxytrue)). Without it IP rate limits are
+  skipped.
 - Rate limits are per instance; swap in Redis behind `RateLimiter` if you run several instances.
 - Secret rotation: rotating `JWT_SECRET` invalidates all access tokens of this deployment only.
 - Database TLS (`sslmode=require`) and least-privilege roles.

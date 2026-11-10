@@ -254,13 +254,42 @@ describe("route()", () => {
 });
 
 describe("clientIp", () => {
-  const req = new Request("http://localhost/x", {
-    headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
+  const req = (headers: Record<string, string>) => new Request("http://localhost/x", { headers });
+  const xff = (v: string) => req({ "x-forwarded-for": v });
+
+  it("ignores X-Forwarded-For and X-Real-IP when trustProxy is false", () => {
+    expect(clientIp(xff("1.2.3.4, 5.6.7.8"), false, 1)).toBe("unknown");
+    expect(clientIp(req({ "x-real-ip": "1.2.3.4" }), false, 1)).toBe("unknown");
   });
-  it("ignores X-Forwarded-For when trustProxy is false", () => {
-    expect(clientIp(req, false)).toBe("unknown");
+
+  it("uses the entry appended by the single trusted proxy (rightmost) by default", () => {
+    expect(clientIp(xff("1.2.3.4, 5.6.7.8"), true, 1)).toBe("5.6.7.8");
+    expect(clientIp(xff("5.6.7.8"), true, 1)).toBe("5.6.7.8");
   });
-  it("uses the first X-Forwarded-For entry when trusted", () => {
-    expect(clientIp(req, true)).toBe("1.2.3.4");
+
+  it("ignores spoofed leftmost entries the client sent itself", () => {
+    // The client sent "X-Forwarded-For: 9.9.9.9, 8.8.8.8"; our proxy appended the real 5.6.7.8.
+    expect(clientIp(xff("9.9.9.9, 8.8.8.8, 5.6.7.8"), true, 1)).toBe("5.6.7.8");
+  });
+
+  it("with hops=2 takes the second entry from the right", () => {
+    // client -> CDN (appends client ip) -> load balancer (appends CDN ip) -> app
+    expect(clientIp(xff("9.9.9.9, 5.6.7.8, 10.0.0.1"), true, 2)).toBe("5.6.7.8");
+    expect(clientIp(xff("5.6.7.8, 10.0.0.1"), true, 2)).toBe("5.6.7.8");
+  });
+
+  it("is unknown when there are fewer entries than hops or the entry is not an IP", () => {
+    expect(clientIp(xff("10.0.0.1"), true, 2)).toBe("unknown");
+    expect(clientIp(xff("1.2.3.4, not-an-ip"), true, 1)).toBe("unknown");
+  });
+
+  it("uses X-Real-IP only when X-Forwarded-For is absent", () => {
+    expect(clientIp(req({ "x-real-ip": "1.2.3.4" }), true, 1)).toBe("1.2.3.4");
+    expect(clientIp(req({ "x-real-ip": "1.2.3.4", "x-forwarded-for": "bogus" }), true, 1)).toBe(
+      "unknown",
+    );
+    expect(clientIp(req({ "x-real-ip": "1.2.3.4", "x-forwarded-for": "5.6.7.8" }), true, 1)).toBe(
+      "5.6.7.8",
+    );
   });
 });

@@ -70,10 +70,23 @@ return 403 `TENANT_SUSPENDED` within 30 s (the tenant cache TTL). Reactivate wit
 
 ## Behind a proxy: `TRUST_PROXY=true`
 
-Terminate TLS at a load balancer. Set `TRUST_PROXY=true` only if the proxy overwrites `X-Forwarded-For`
-(client-supplied values must not pass through): the first hop is used as the client IP. Without it the IP
-is "unknown", **all IP-based rate limits are skipped** (a warning is logged in production) and only the
-account-keyed limits apply. Also make the proxy or CDN key any cache of `/app/config` on `X-Client-Id`
+Terminate TLS at a load balancer and set `TRUST_PROXY=true`. Most proxies **append** the peer address to
+`X-Forwarded-For` instead of replacing it, so the leftmost entries are whatever the client sent. The app
+therefore reads the client IP from the right: set `TRUST_PROXY_HOPS` to the number of proxies **you
+control** between the internet and the app (default `1`); the entry that many places from the right is
+the client IP and everything to its left is ignored. If the header has fewer entries than that, or the
+entry is not an IP, the IP is "unknown". `X-Real-IP` is read only when `X-Forwarded-For` is absent.
+
+| Setup | `TRUST_PROXY_HOPS` |
+| --- | --- |
+| AWS ALB in front of the app (appends the client IP) | `1` |
+| GCP external HTTP(S) load balancer (appends `<client-ip>, <lb-ip>`) | `2` |
+| nginx with `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` | `1` per nginx you run |
+| CDN (e.g. CloudFront) -> ALB -> app | `2` (CDN + ALB) |
+
+The rule: hops = number of proxies you control that append to the header. Verify once by logging a
+request through the real chain. Without `TRUST_PROXY=true` the IP is "unknown", **all IP-based rate
+limits are skipped** (a warning is logged in production) and only the account-keyed limits apply. Also make the proxy or CDN key any cache of `/app/config` on `X-Client-Id`
 (the response sends `Vary: X-Client-Id`).
 
 ## Rate limits are per instance
