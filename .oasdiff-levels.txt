@@ -3,3 +3,8 @@ response-mediatype-enum-value-removed ERR
 response-non-success-status-removed ERR
 optional-response-header-removed ERR
 api-operation-id-removed ERR
+response-optional-property-removed ERR
+request-property-removed ERR
+request-parameter-removed ERR
+request-property-pattern-changed ERR
+request-parameter-pattern-changed ERR

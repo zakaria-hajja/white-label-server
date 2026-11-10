@@ -1,4 +1,4 @@
-# oasdiff config, picked up from the repo root by the CI breaking-change step (and local runs).
-# docs/contract.md treats some changes as breaking that oasdiff rates INFO by default; the levels
-# file raises them to ERR so `fail-on: ERR` catches them.
+# oasdiff config, read from the repo root by scripts/check-breaking.sh (the CI breaking-change step).
+# docs/contract.md treats some changes as breaking that oasdiff rates INFO or WARN by default; the
+# levels file raises them to ERR, and the script fails on any ERR except a new error code.
 severity-levels: .oasdiff-levels.txt
