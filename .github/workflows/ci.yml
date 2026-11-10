@@ -73,7 +73,7 @@ jobs:
       - run: npm run build
 
       - name: Commit messages
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
