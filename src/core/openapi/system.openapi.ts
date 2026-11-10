@@ -1,6 +1,7 @@
 import { HealthDtoSchema } from "../http/health";
 import { SuccessEnvelope, registerOperation } from "./components";
 import { registry, TAGS } from "./registry";
+import { healthExamples } from "./system.examples";
 
 export const HealthEnvelope = SuccessEnvelope(
   "HealthEnvelope",
@@ -18,7 +19,12 @@ registerOperation({
   auth: "none",
   tenant: "none",
   success: [
-    { status: 200, description: "Healthy", schema: HealthEnvelope },
-    { status: 503, description: "Database unreachable", schema: HealthEnvelope },
+    { status: 200, description: "Healthy", schema: HealthEnvelope, example: healthExamples.ok },
+    {
+      status: 503,
+      description: "Database unreachable",
+      schema: HealthEnvelope,
+      example: healthExamples.degraded,
+    },
   ],
 });

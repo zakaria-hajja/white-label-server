@@ -29,6 +29,18 @@ import { SettingsService } from "@/modules/settings/settings.service";
 import { UserEnvelope } from "@/modules/users/users.openapi";
 import type { AppConfigReader } from "@/modules/app-config/app-config.reader";
 import { HealthEnvelope } from "@/core/openapi/system.openapi";
+import { FIXTURE_IDS, FIXTURE_NOW, FIXTURE_TENANT } from "@/core/openapi/fixtures";
+import { appConfigExample, appConfigFixtures } from "@/modules/app-config/app-config.examples";
+import { authExamples, authFixtures } from "@/modules/auth/auth.examples";
+import { catalogExamples, catalogFixtures } from "@/modules/catalog/catalog.examples";
+import {
+  settingsBodyExample,
+  settingsExamples,
+  settingsFixtures,
+} from "@/modules/settings/settings.examples";
+import { usersBodyExamples, usersExamples } from "@/modules/users/users.examples";
+import { UsersService } from "@/modules/users/users.service";
+import { FakeUsersRepository } from "../../helpers/fakes/users-repository.fake";
 
 /**
  * Real mapper/service output, wrapped by the real `ok()` and parsed against the schemas the OpenAPI
@@ -167,5 +179,96 @@ describe("response DTOs match their OpenAPI response schemas", () => {
   it("rejects an envelope with a leaked field shape (sanity)", async () => {
     expect(UserEnvelope.safeParse(await body({ id: "x" })).success).toBe(false);
     void pino;
+  });
+});
+
+/**
+ * Review Focus 2: each spec example is the real service output on the same fixture. If a DTO gains
+ * a field and its example isn't regenerated from the mapper, these fail.
+ */
+describe("spec examples equal the real service output on their fixtures", () => {
+  const ctx: TenantContext = {
+    tenantId: FIXTURE_IDS.tenant,
+    slug: FIXTURE_TENANT.slug,
+    name: FIXTURE_TENANT.name,
+    source: "header",
+  };
+  const auth = {
+    userId: FIXTURE_IDS.user,
+    tenantId: FIXTURE_IDS.tenant,
+    sessionId: FIXTURE_IDS.session,
+  };
+  const fixtureReader: AppConfigReader = {
+    getDocument: () => Promise.resolve(appConfigFixtures.document),
+  };
+  const fixedClock = { now: () => FIXTURE_NOW };
+
+  function authRepo() {
+    const repo = new FakeAuthRepository(() => FIXTURE_NOW);
+    repo.users.push({
+      ...authFixtures.user,
+      tenantId: FIXTURE_IDS.tenant,
+      passwordHash: "x",
+      status: "ACTIVE",
+      failedLoginCount: 0,
+      lockedUntil: null,
+      passwordChangedAt: authFixtures.user.createdAt,
+      updatedAt: authFixtures.user.createdAt,
+    });
+    for (const s of authFixtures.sessions) {
+      repo.sessions.push({
+        ...s,
+        tenantId: FIXTURE_IDS.tenant,
+        userId: FIXTURE_IDS.user,
+        ipAddress: null,
+        revokedAt: null,
+        revokedReason: null,
+      });
+    }
+    return repo;
+  }
+
+  it("me and sessions", async () => {
+    const service = new AuthService(authRepo(), cfg, fixedClock, resetDeps);
+    expect(await service.me(ctx, auth)).toEqual(authExamples.me.data);
+    expect({ sessions: await service.listSessions(ctx, auth) }).toEqual(authExamples.sessions.data);
+  });
+
+  it("users me and updated me", async () => {
+    const service = new UsersService(new FakeUsersRepository(authRepo()), fixedClock);
+    expect(await service.getMe(ctx, auth)).toEqual(usersExamples.user.data);
+    expect(await service.updateMe(ctx, auth, usersBodyExamples.updateMe)).toEqual(
+      usersExamples.updated.data,
+    );
+  });
+
+  it("settings defaults and stored values", async () => {
+    const empty = new SettingsService(new FakeSettingsRepository(), fixtureReader);
+    expect(await empty.get(ctx, auth)).toEqual(settingsExamples.defaults.data);
+    const repo = new FakeSettingsRepository();
+    await repo.upsertForUser(ctx.tenantId, auth.userId, settingsFixtures.stored);
+    const stored = new SettingsService(repo, fixtureReader);
+    expect(await stored.get(ctx, auth)).toEqual(settingsExamples.stored.data);
+    expect(await stored.update(ctx, auth, settingsBodyExample)).toEqual(
+      settingsExamples.stored.data,
+    );
+  });
+
+  it("public app config", async () => {
+    const service = new AppConfigService(fixtureReader, {
+      all: () => Promise.resolve({ ...appConfigFixtures.features }),
+    });
+    expect(await service.getPublic(ctx)).toEqual(appConfigExample.data);
+  });
+
+  it("catalog page and item", async () => {
+    const repo = new FakeCatalogRepository();
+    for (const item of catalogFixtures.items) repo.rows.push({ ...item, tenantId: ctx.tenantId });
+    const service = new CatalogService(repo);
+    const { items, pagination } = await service.list(ctx, catalogFixtures.query);
+    expect(items).toEqual(catalogExamples.page.data);
+    expect(pagination).toEqual(catalogExamples.page.meta.pagination);
+    const first = catalogFixtures.items[0];
+    expect(await service.get(ctx, first?.id ?? "")).toEqual(catalogExamples.item.data);
   });
 });

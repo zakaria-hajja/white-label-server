@@ -17,6 +17,11 @@ export type SuccessResponseDef = {
   schema: ZodType;
   /** Extra response headers (X-Request-Id is always added). */
   headers?: Record<string, { description: string; schema: { type: "string" } }>;
+  /**
+   * The full envelope, computed from the module's `*.examples.ts` fixtures by the real mappers.
+   * `tests/unit/openapi/examples.test.ts` parses it against `schema`.
+   */
+  example: unknown;
 };
 
 /**
@@ -36,6 +41,8 @@ export type OperationDef = {
   auth: "none" | "required";
   tenant: "none" | "required";
   body?: ZodType;
+  /** Required when `body` is set (registration throws otherwise); must parse with `body`. */
+  bodyExample?: unknown;
   query?: ZodType;
   params?: ZodType;
   rateLimit?: RateLimitRule[];
@@ -43,6 +50,11 @@ export type OperationDef = {
   success: SuccessResponseDef[];
   /** Error statuses this operation can return beyond the ones derived from its config. */
   extraErrors?: number[];
+  /**
+   * Error-envelope examples by status, overriding the defaults (400 VALIDATION_ERROR or
+   * INVALID_CLIENT, 401 UNAUTHENTICATED, 429 RATE_LIMITED). Required for a 401 on a public operation.
+   */
+  errorExamples?: Partial<Record<number, unknown>>;
 };
 
 /** Every registered operation, for the contract test. */

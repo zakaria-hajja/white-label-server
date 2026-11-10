@@ -2,6 +2,7 @@ import { z, type ZodType } from "zod";
 import type { ResponseConfig, RouteConfig } from "@asteasolutions/zod-to-openapi";
 import { ERROR_STATUS, type ErrorCode } from "../errors/codes";
 import { operations, registry, type OperationDef } from "./registry";
+import { errorExamples } from "./system.examples";
 
 const ERROR_CODES = Object.keys(ERROR_STATUS) as [ErrorCode, ...ErrorCode[]];
 
@@ -120,6 +121,23 @@ export function errorStatuses(op: OperationDef): number[] {
   return [...s].sort((a, b) => a - b);
 }
 
+/** The example for one error status: the op's override, else a default, else none. */
+function errorExample(op: OperationDef, status: number): unknown {
+  const override = op.errorExamples?.[status];
+  if (override !== undefined) return override;
+  if (status === 400) {
+    return op.body || op.query || op.params
+      ? errorExamples.validation
+      : errorExamples.invalidClient;
+  }
+  if (status === 401) {
+    if (op.auth === "required") return errorExamples.unauthenticated;
+    throw new Error(`${op.operationId}: a public operation with a 401 needs errorExamples[401]`);
+  }
+  if (status === 429) return errorExamples.rateLimited;
+  return undefined;
+}
+
 function errorResponse(op: OperationDef, status: number): ResponseConfig {
   const requestId = { $ref: "#/components/headers/XRequestId" };
   let description = `${STATUS_TEXT[status] ?? "Error"}. Possible codes: ${codesFor(status).join(", ")}.`;
@@ -131,15 +149,21 @@ function errorResponse(op: OperationDef, status: number): ResponseConfig {
       .join("; ");
     description += ` Limits (per instance): ${limits}.`;
   }
+  const example = errorExample(op, status);
   return {
     description,
     headers,
-    content: { "application/json": { schema: ErrorEnvelope } },
+    content: {
+      "application/json": { schema: ErrorEnvelope, ...(example !== undefined ? { example } : {}) },
+    },
   };
 }
 
 /** Registers an operation and derives its parameters, security and error responses. */
 export function registerOperation(op: OperationDef): void {
+  if (op.body && op.bodyExample === undefined) {
+    throw new Error(`${op.operationId}: an operation with a body needs a bodyExample`);
+  }
   operations.push(op);
   const responses: RouteConfig["responses"] = {};
   for (const s of op.success) {
@@ -149,7 +173,7 @@ export function registerOperation(op: OperationDef): void {
         "X-Request-Id": { $ref: "#/components/headers/XRequestId" },
         ...s.headers,
       },
-      content: { "application/json": { schema: s.schema } },
+      content: { "application/json": { schema: s.schema, example: s.example } },
     };
   }
   for (const status of errorStatuses(op)) responses[status] = errorResponse(op, status);
@@ -168,7 +192,12 @@ export function registerOperation(op: OperationDef): void {
       ...(op.query ? { query: op.query as z.ZodObject } : {}),
       headers: [...(op.tenant === "required" ? [XClientId] : []), XRequestId],
       ...(op.body
-        ? { body: { required: true, content: { "application/json": { schema: op.body } } } }
+        ? {
+            body: {
+              required: true,
+              content: { "application/json": { schema: op.body, example: op.bodyExample } },
+            },
+          }
         : {}),
     },
     responses,
