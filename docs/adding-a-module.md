@@ -51,7 +51,9 @@ export type CatalogListQuery = z.infer<typeof CatalogListQuerySchema>;
 - Every repository method takes `tenantId` as its first argument and puts it in the `where`.
 - Look up by id with `findFirst({ where: { id, tenantId } })`, never `findUnique({ where: { id } })`.
   A row of another tenant is then simply "not found" (404 `NOT_FOUND`), never 403.
-- `tenantId` comes from `c.tenant` (resolved from the token), never from the body, query or path.
+- `tenantId` comes from `c.tenant`, which `route()` resolves centrally (shared mode: the `X-Client-Id`
+  header checked against the token's tenant; dedicated mode: deployment config), never from the
+  body, query or path.
   Never trust an id from input for ownership.
 
 ```ts
