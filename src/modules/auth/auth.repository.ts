@@ -14,6 +14,8 @@ export type NewUser = {
   lastName: string | null;
 };
 
+export type UserCredentials = Pick<User, "status" | "passwordHash" | "passwordChangedAt">;
+
 export type SessionMeta = { userAgent: string | null; ip: string | null };
 
 export type RefreshTokenWithSession = { token: RefreshToken; session: Session };
@@ -30,6 +32,12 @@ export interface AuthRepository {
     lockUntil: Date,
   ): Promise<number>;
   resetFailedLogins(tenantId: string, userId: string): Promise<void>;
+  /**
+   * Reads the user's credential state and locks the row until the transaction ends
+   * (`SELECT ... FOR UPDATE`), so a concurrent password reset waits for, or is seen by, the caller.
+   * Only meaningful inside `transaction()`.
+   */
+  lockUserCredentials(tenantId: string, userId: string): Promise<UserCredentials | null>;
   createSession(
     tenantId: string,
     userId: string,
@@ -131,6 +139,15 @@ export class PrismaAuthRepository implements AuthRepository {
       where: { tenantId_id: { tenantId, id: userId } },
       data: { failedLoginCount: 0, lockedUntil: null },
     });
+  }
+
+  async lockUserCredentials(tenantId: string, userId: string): Promise<UserCredentials | null> {
+    const rows = await this.db.$queryRaw<
+      { status: User["status"]; passwordHash: string; passwordChangedAt: Date }[]
+    >`SELECT status::text AS "status", password_hash AS "passwordHash",
+             password_changed_at AS "passwordChangedAt"
+        FROM users WHERE tenant_id = ${tenantId}::uuid AND id = ${userId}::uuid FOR UPDATE`;
+    return rows[0] ?? null;
   }
 
   createSession(

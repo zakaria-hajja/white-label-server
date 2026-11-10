@@ -5,6 +5,7 @@ import type {
   NewUser,
   RefreshTokenWithSession,
   SessionMeta,
+  UserCredentials,
 } from "@/modules/auth/auth.repository";
 
 /** In-memory AuthRepository for unit tests. Unique (tenantId, email) is enforced like the DB would. */
@@ -66,6 +67,15 @@ export class FakeAuthRepository implements AuthRepository {
       u.lockedUntil = null;
     }
     return Promise.resolve();
+  }
+
+  lockUserCredentials(tenantId: string, userId: string): Promise<UserCredentials | null> {
+    const u = this.users.find((x) => x.tenantId === tenantId && x.id === userId);
+    return Promise.resolve(
+      u
+        ? { status: u.status, passwordHash: u.passwordHash, passwordChangedAt: u.passwordChangedAt }
+        : null,
+    );
   }
 
   createSession(

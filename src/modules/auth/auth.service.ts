@@ -83,6 +83,9 @@ export class AuthService {
       await dummyVerify(input.password);
       throw new AppError("INVALID_CREDENTIALS");
     }
+    // Snapshot what was verified: a reset committing after this point must not leave a session.
+    const verifiedHash = user.passwordHash;
+    const verifiedChangedAt = user.passwordChangedAt.getTime();
     if (!(await verifyPassword(user.passwordHash, input.password))) {
       // An expired lock starts a fresh count (the guards above ruled out an active lock).
       if (user.lockedUntil !== null) await this.repo.resetFailedLogins(ctx.tenantId, user.id);
@@ -97,9 +100,20 @@ export class AuthService {
     if (user.failedLoginCount > 0 || user.lockedUntil !== null) {
       await this.repo.resetFailedLogins(ctx.tenantId, user.id);
     }
-    const { session, refreshToken } = await this.repo.transaction((repo) =>
-      this.createSession(repo, ctx.tenantId, user.id, meta, now),
-    );
+    const { session, refreshToken } = await this.repo.transaction(async (repo) => {
+      // Lock the user row: a password reset racing this login either committed already (we see the
+      // new hash and abort) or waits for us and then revokes the session we create.
+      const current = await repo.lockUserCredentials(ctx.tenantId, user.id);
+      if (
+        !current ||
+        current.status !== "ACTIVE" ||
+        current.passwordHash !== verifiedHash ||
+        current.passwordChangedAt.getTime() !== verifiedChangedAt
+      ) {
+        throw new AppError("INVALID_CREDENTIALS");
+      }
+      return this.createSession(repo, ctx.tenantId, user.id, meta, now);
+    });
     return {
       user: toUserDto(user),
       tokens: await this.tokens(user.id, ctx, session, refreshToken, now),

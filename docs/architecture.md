@@ -274,7 +274,7 @@ sequenceDiagram
     R->>S: login(ctx, input)
     S->>DB: User where tenantId AND email
     S->>S: argon2id verify (dummy verify if no user, locked or disabled)
-    S->>DB: create Session + RefreshToken(hash)
+    S->>DB: tx: lock User row, re-check hash, create Session + RefreshToken(hash)
     S-->>A: {user, tokens{accessToken(sub,tid,sid), refreshToken, expiresIn}}
     A->>R: GET /users/me  Authorization: Bearer ...
     R->>R: verify JWT signature/iss/aud/exp
@@ -319,6 +319,11 @@ pair is superseded (it gets `401` without revocation and the user signs in again
   instances). A locked, disabled or unknown account returns the same `401 INVALID_CREDENTIALS` as a
   wrong password, and each of those paths spends one Argon2 verification (a dummy one when no hash is
   available) to equalize timing. A successful login clears the counter.
+- A login racing a password reset cannot leave a session that survives the reset: the transaction that
+  creates the session locks the user row (`SELECT ... FOR UPDATE`) and aborts with `401
+  INVALID_CREDENTIALS` if the password hash or `passwordChangedAt` changed since the password was
+  verified (or the user is no longer `ACTIVE`). A reset that is still committing makes the login wait
+  and then fail.
 - Forgot-password always answers `202 {}` and swallows mail errors.
 - Reset tokens: 32 random bytes, SHA-256 stored, 30 min expiry, single use, looked up per tenant. A
   reset updates the password, revokes all sessions and clears the lockout. Requesting a new token
