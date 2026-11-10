@@ -70,25 +70,38 @@ are exported as `STARTER_FEATURE_KEYS` from
 | `profile` | The profile screen | the client only: the server never gates `/users/me`, because sign-in and settings need it |
 
 New tenants get both keys switched on, and `npm run db:seed` adds any key a seeded tenant is missing
-without flipping existing values. Home, settings and auth have no flag. Apps may add their own keys.
+without flipping existing values. The seed never runs in production: a tenant created before `profile`
+existed doesn't have the key, so the client reads it as off. Operators switch it on once per such
+tenant: `npm run tenant -- set-feature --slug <slug> --key profile --enabled true`. Home, settings and auth have no flag. Apps may add their own keys.
 
 ## CI guards
 
 - **Breaking-change check.** On every pull request, CI compares the PR's `openapi/openapi.json` with
-  the copy on the PR's base branch, using `oasdiff` in breaking mode, and fails on any breaking change.
-  For stacked PRs the base is the branch below, so each PR is checked against what it lands on. If the
-  base has no spec yet (an app backend's first PR), the check passes with a notice. oasdiff rates a few
-  changes this policy treats as breaking as informational (removing a response enum value such as an
-  error code, a non-success status, a response header or an `operationId`); `.oasdiff-levels.txt` raises
-  them to errors. The specs are never uploaded anywhere.
+  the copy on the PR's base branch (`scripts/check-breaking.sh`, which runs `oasdiff` in breaking mode
+  in a pinned container). For stacked PRs the base is the branch below, so each PR is checked against
+  what it lands on. If the base has no spec yet (an app backend's first PR), the check passes with a
+  notice. The specs never leave the CI runner.
+  - oasdiff rates some changes this policy treats as breaking as informational or warnings: removing a
+    response enum value (such as an error code), an optional response field, a request field, a
+    non-success status, a response header or an `operationId`, and changing a request pattern.
+    `.oasdiff-levels.txt` raises them to errors.
+  - oasdiff rates a new response enum value as an error. The script allows it for the error envelope's
+    `code` only (clients map unknown codes to `UNKNOWN`) and prints the new codes; a new value in any
+    other response enum, such as `theme`, still fails.
+  - The check covers what the spec can express. A behaviour change with the same schema (a different
+    status for the same case, a changed header meaning) is still caught only in review.
 - **Namespace guard.** `tests/unit/contract/namespace.test.ts` keeps the starter's route list
   (`METHOD path`, so a new method on an existing path must be listed too). It fails when a route outside
-  `x/` isn't listed, when a listed route no longer exists, or when the list contains an `x/` route.
+  `x/` isn't listed, when a listed route no longer exists, or when the list contains an `x/` route. It
+  allows unlisted `x/` routes, because it also runs in app backends; in the starter repo, a CI step
+  fails if any file exists under `src/app/api/v1/x/`.
 - **Spec drift.** CI regenerates the spec and fails on any diff, so the spec at a tag always matches the
   code at that tag.
-- **Examples.** `tests/unit/openapi/examples.test.ts` parses every example with its schema, and
-  `tests/unit/openapi/dto-contract.test.ts` checks that each response example equals the real service
-  output on the same fixture.
+- **Examples.** `tests/unit/openapi/examples.test.ts` parses every example with its schema and checks
+  that each error example's code is one the operation can return. `tests/unit/openapi/dto-contract.test.ts`
+  checks that each response example equals the real service output on the same fixture (token values,
+  which are random, are swapped for the fixture's). The health and error examples are literals checked
+  only by parsing.
 
 ## What Android depends on
 
