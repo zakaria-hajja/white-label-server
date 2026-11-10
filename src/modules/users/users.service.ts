@@ -5,7 +5,7 @@ import type { TenantContext } from "@/core/tenant/tenant-context";
 import type { Clock } from "@/shared/clock";
 import { toUserDto, type UserDto } from "../auth/user.dto";
 import type { UsersRepository } from "./users.repository";
-import type { ChangePasswordInput, UpdateMeInput } from "./users.schemas";
+import type { ChangePasswordInput, DeleteMeInput, UpdateMeInput } from "./users.schemas";
 
 export class UsersService {
   constructor(
@@ -26,6 +26,24 @@ export class UsersService {
       ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
     };
     return toUserDto(await this.repo.updateProfile(ctx.tenantId, auth.userId, patch));
+  }
+
+  /** Hard delete after confirming the password. The next request with the old tokens is 401. */
+  async deleteMe(ctx: TenantContext, auth: AuthContext, input: DeleteMeInput): Promise<void> {
+    const user = await this.repo.findById(ctx.tenantId, auth.userId);
+    if (!user) throw new AppError("NOT_FOUND");
+    if (!(await verifyPassword(user.passwordHash, input.password))) {
+      throw new AppError("INVALID_CREDENTIALS");
+    }
+    const guard = { passwordChangedAt: user.passwordChangedAt, sessionId: auth.sessionId };
+    if (await this.repo.deleteUser(ctx.tenantId, user.id, guard)) return;
+    // Nothing matched: something changed between the check and the delete.
+    const current = await this.repo.findById(ctx.tenantId, auth.userId);
+    if (!current) return; // already deleted, e.g. a double submit: the outcome the caller asked for
+    if (current.passwordChangedAt.getTime() !== user.passwordChangedAt.getTime()) {
+      throw new AppError("INVALID_CREDENTIALS"); // the password changed; the verified one is stale
+    }
+    throw new AppError("UNAUTHENTICATED"); // the caller's session was revoked meanwhile
   }
 
   async changePassword(

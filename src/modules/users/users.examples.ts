@@ -4,6 +4,7 @@ import { toUserDto } from "../auth/user.dto";
 
 export const usersBodyExamples = {
   updateMe: { firstName: "Alicia" },
+  deleteMe: { password: "correct-horse-battery" },
   changePassword: {
     currentPassword: "correct-horse-battery",
     newPassword: "new-correct-horse-battery",

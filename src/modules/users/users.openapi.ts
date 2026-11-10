@@ -1,8 +1,8 @@
 import { SuccessEnvelope, registerOperation } from "@/core/openapi/components";
 import { TAGS } from "@/core/openapi/registry";
 import { EmptyEnvelope, User } from "../auth/auth.openapi";
-import { changePasswordRateLimit } from "./users.handlers";
-import { changePasswordBody, updateMeBody } from "./users.schemas";
+import { changePasswordRateLimit, deleteAccountRateLimit } from "./users.handlers";
+import { changePasswordBody, deleteMeBody, updateMeBody } from "./users.schemas";
 import { usersBodyExamples, usersExamples } from "./users.examples";
 import { authExamples } from "../auth/auth.examples";
 
@@ -54,6 +54,29 @@ registerOperation({
     {
       status: 200,
       description: "Password changed",
+      schema: EmptyEnvelope,
+      example: authExamples.empty,
+    },
+  ],
+});
+
+registerOperation({
+  ...base,
+  method: "delete",
+  path: "/api/v1/users/me",
+  operationId: "usersDeleteMe",
+  summary: "Delete the current user's account",
+  description:
+    "Permanently deletes the account and all its sessions and settings. Confirm with the current password. " +
+    "A wrong password is INVALID_CREDENTIALS (401). The body is required (Content-Type: application/json). " +
+    "Afterwards the old access and refresh tokens are rejected, and the email can register again.",
+  body: deleteMeBody,
+  bodyExample: usersBodyExamples.deleteMe,
+  rateLimit: deleteAccountRateLimit,
+  success: [
+    {
+      status: 200,
+      description: "Account deleted",
       schema: EmptyEnvelope,
       example: authExamples.empty,
     },

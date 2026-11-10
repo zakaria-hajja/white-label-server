@@ -48,6 +48,14 @@ The owner cuts tags on `main`, each with a GitHub release whose notes list the c
 any migration steps. Android pins a tag for its vendored `api/openapi.json`; each app's backend merges
 tags.
 
+## v1 additions
+
+Contract surface added after `v1.0.0`, by the tag that ships it:
+
+| Tag | Addition |
+| --- | --- |
+| `v1.1.0` | `DELETE /api/v1/users/me` (`usersDeleteMe`): delete the account, confirmed with the password; rate limit `delete-account` |
+
 ## The app namespace: `/api/v1/x/`
 
 The starter never defines routes under `/api/v1/x/`. App backends put all their own endpoints there

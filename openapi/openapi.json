@@ -2551,6 +2551,204 @@
       }
     },
     "/api/v1/users/me": {
+      "delete": {
+        "description": "Permanently deletes the account and all its sessions and settings. Confirm with the current password. A wrong password is INVALID_CREDENTIALS (401). The body is required (Content-Type: application/json). Afterwards the old access and refresh tokens are rejected, and the email can register again.",
+        "operationId": "usersDeleteMe",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XClientId"
+          },
+          {
+            "$ref": "#/components/parameters/XRequestIdParam"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "password": "correct-horse-battery"
+              },
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "password": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "password"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {},
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": true
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyEnvelope"
+                }
+              }
+            },
+            "description": "Account deleted",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [
+                      {
+                        "message": "Invalid email address",
+                        "path": "email"
+                      }
+                    ],
+                    "message": "Request validation failed"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad request. Possible codes: VALIDATION_ERROR, INVALID_CLIENT, INVALID_RESET_TOKEN.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthenticated. Possible codes: UNAUTHENTICATED, TOKEN_EXPIRED, INVALID_CREDENTIALS, INVALID_REFRESH_TOKEN.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden. Possible codes: FORBIDDEN, TENANT_SUSPENDED, TENANT_MISMATCH.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            }
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Payload too large. Possible codes: PAYLOAD_TOO_LARGE.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "RATE_LIMITED",
+                    "message": "RATE_LIMITED"
+                  },
+                  "meta": {
+                    "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
+                  },
+                  "success": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too many requests. Possible codes: RATE_LIMITED. Limits (per instance): delete-account: 5 per 900s.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Internal error. Possible codes: INTERNAL_ERROR.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete the current user's account",
+        "tags": [
+          "Users"
+        ]
+      },
       "get": {
         "operationId": "usersGetMe",
         "parameters": [

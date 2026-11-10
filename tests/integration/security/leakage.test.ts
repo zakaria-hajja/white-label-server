@@ -13,7 +13,7 @@ import { POST as resetPassword } from "@/app/api/v1/auth/reset-password/route";
 import { GET as authMe } from "@/app/api/v1/auth/me/route";
 import { GET as listSessions } from "@/app/api/v1/auth/sessions/route";
 import { DELETE as deleteSession } from "@/app/api/v1/auth/sessions/[id]/route";
-import { GET as getMe, PATCH as patchMe } from "@/app/api/v1/users/me/route";
+import { DELETE as deleteMe, GET as getMe, PATCH as patchMe } from "@/app/api/v1/users/me/route";
 import { PATCH as patchPassword } from "@/app/api/v1/users/me/password/route";
 import { GET as getSettings, PATCH as patchSettings } from "@/app/api/v1/settings/route";
 import { GET as listCatalog } from "@/app/api/v1/catalog/route";
@@ -160,7 +160,16 @@ describe("response leakage", () => {
       ),
       200,
     );
-    expect(seen).toBeGreaterThanOrEqual(18);
+    // Last: deletes an account (bob's, so alice's calls above are unaffected).
+    const bob = await loginAs("acme", "bob@shared.test");
+    await rec(
+      await deleteMe(
+        req("DELETE", "users/me", { token: bob.accessToken, body: { password: SEED_PASSWORD } }),
+        noParams,
+      ),
+      200,
+    );
+    expect(seen).toBeGreaterThanOrEqual(19);
   });
 
   it("error paths of every endpoint leak nothing and are never publicly cacheable", async () => {
@@ -257,10 +266,18 @@ describe("response leakage", () => {
       404,
     );
     await rec(
+      await deleteMe(
+        req("DELETE", "users/me", { token: t, body: { password: "wrong-password" } }),
+        noParams,
+      ),
+      401,
+    );
+    await rec(await deleteMe(req("DELETE", "users/me", { token: t, raw: "" }), noParams), 400);
+    await rec(
       await appConfig(req("GET", "app/config", { client: "no-such-tenant" }), noParams),
       400,
     );
-    expect(errors).toBeGreaterThanOrEqual(18);
+    expect(errors).toBeGreaterThanOrEqual(20);
   });
 
   it("a forced 500 (missing ApplicationConfiguration row) is generic and not cacheable", async () => {

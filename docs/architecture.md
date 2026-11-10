@@ -356,6 +356,20 @@ pair is superseded (it gets `401` without revocation and the user signs in again
 - Changing a password (`PATCH /users/me/password`) requires the current password and revokes every
   other session, keeping the caller's.
 
+**Account lifecycle**
+
+Register creates the user and the first session. Deleting the account (`DELETE /users/me`) is a hard
+delete, confirmed with the current password (`401 INVALID_CREDENTIALS` otherwise, before anything is
+touched). A single `delete` of the user row relies on the schema's `onDelete: Cascade` relations to remove
+the user's sessions (and their refresh tokens), password reset tokens and settings, in one atomic
+statement. The delete is conditional on what was verified: the same `passwordChangedAt` and a live
+caller session. A password change, reset or revocation that commits between the check and the delete
+wins (`401 INVALID_CREDENTIALS` or `401 UNAUTHENTICATED`, nothing deleted), and a concurrent duplicate
+request that finds the account already gone returns 200. Catalog items, app config and flags are tenant-owned and untouched; there is no audit table.
+Because every authenticated request checks the session in the database, the next request with the old
+access token is `401 UNAUTHENTICATED`, and the old refresh token is `401 INVALID_REFRESH_TOKEN`. The
+email is free to register again as a new account. There is no soft delete or recovery.
+
 **Rate limits** (in `auth.handlers.ts` and `users.handlers.ts`, evaluated by `route()` after input parsing; `429
 RATE_LIMITED` with `Retry-After`). IP rules use `ipKey`, which skips the rule when the IP is unknown.
 Rules run in list order and the first rejection stops evaluation, so every list puts its IP rules first:
@@ -372,6 +386,7 @@ a blocked IP never creates body-keyed (email) buckets. The in-memory limiter hol
 | `forgot-account`          | POST /auth/forgot-password | 3 / 15 min     | tenant id + email   |
 | `reset-ip`                | POST /auth/reset-password  | 10 / 15 min    | IP                  |
 | `change-password-account` | PATCH /users/me/password   | 5 / 15 min     | tenant id + user id |
+| `delete-account`          | DELETE /users/me           | 5 / 15 min     | tenant id + user id |
 
 Differences from the original design: `login-account` is keyed by tenant and email, not IP and email, so
 distributed guessing is also limited; logout, `/auth/me`, sessions and the other `/users/me` routes have

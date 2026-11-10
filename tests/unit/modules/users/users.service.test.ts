@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeAuthRepository } from "../../../helpers/fakes/auth-repository.fake";
 import { FakeUsersRepository } from "../../../helpers/fakes/users-repository.fake";
 import { verifyPassword } from "@/core/auth/password";
@@ -6,7 +6,7 @@ import { AppError } from "@/core/errors/app-error";
 import type { TenantContext } from "@/core/tenant/tenant-context";
 import { AuthService } from "@/modules/auth/auth.service";
 import { UsersService } from "@/modules/users/users.service";
-import { updateMeBody, changePasswordBody } from "@/modules/users/users.schemas";
+import { updateMeBody, changePasswordBody, deleteMeBody } from "@/modules/users/users.schemas";
 
 const A: TenantContext = {
   tenantId: "00000000-0000-4000-8000-00000000000a",
@@ -151,5 +151,92 @@ describe("changePassword", () => {
       service.changePassword(A, auth, { currentPassword: OLD, newPassword: NEW }),
       "NOT_FOUND",
     );
+  });
+});
+
+describe("deleteMe", () => {
+  it("schema: strict, password 1-128 chars", () => {
+    expect(deleteMeBody.safeParse({ password: "x" }).success).toBe(true);
+    expect(deleteMeBody.safeParse({ password: "" }).success).toBe(false);
+    expect(deleteMeBody.safeParse({ password: "x".repeat(129) }).success).toBe(false);
+    expect(deleteMeBody.safeParse({}).success).toBe(false);
+    expect(deleteMeBody.safeParse({ password: "x", userId: "u" }).success).toBe(false);
+  });
+
+  it("a wrong password -> INVALID_CREDENTIALS and nothing is deleted", async () => {
+    await rejects(
+      service.deleteMe(A, auth, { password: "wrong-password-1" }),
+      "INVALID_CREDENTIALS",
+    );
+    expect(authRepo.users).toHaveLength(1);
+  });
+
+  it("the correct password deletes exactly the caller's user", async () => {
+    const repo = new FakeUsersRepository(authRepo);
+    const spy = vi.spyOn(repo, "deleteUser");
+    await new UsersService(repo, clock).deleteMe(A, auth, { password: OLD });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(A.tenantId, auth.userId, {
+      passwordChangedAt: expect.any(Date),
+      sessionId: auth.sessionId,
+    });
+    expect(authRepo.users).toHaveLength(0);
+  });
+
+  it("a user of another tenant is NOT_FOUND and nothing is deleted", async () => {
+    await rejects(
+      service.deleteMe(B, { ...auth, tenantId: B.tenantId }, { password: OLD }),
+      "NOT_FOUND",
+    );
+    expect(authRepo.users).toHaveLength(1);
+  });
+
+  it("an unknown user -> NOT_FOUND", async () => {
+    await rejects(
+      service.deleteMe(
+        A,
+        { ...auth, userId: "00000000-0000-4000-8000-0000000000ff" },
+        { password: OLD },
+      ),
+      "NOT_FOUND",
+    );
+  });
+});
+
+describe("deleteMe races (the delete is conditional on what was verified)", () => {
+  /** findById returns the row as it was when the password was checked; the store moves on. */
+  function staleRead(mutate: () => void): UsersService {
+    const repo = new FakeUsersRepository(authRepo);
+    const original = repo.findById.bind(repo);
+    vi.spyOn(repo, "findById").mockImplementation(async (t, id) => {
+      const u = await original(t, id);
+      const snapshot = u ? { ...u } : null;
+      mutate();
+      return snapshot;
+    });
+    return new UsersService(repo, clock);
+  }
+
+  it("a password change that commits mid-delete wins: INVALID_CREDENTIALS, user kept", async () => {
+    const svc = staleRead(() => {
+      authRepo.users[0]!.passwordChangedAt = new Date(now.getTime() + 1000);
+    });
+    await rejects(svc.deleteMe(A, auth, { password: OLD }), "INVALID_CREDENTIALS");
+    expect(authRepo.users).toHaveLength(1);
+  });
+
+  it("the caller's session revoked mid-delete: UNAUTHENTICATED, user kept", async () => {
+    const svc = staleRead(() => {
+      authRepo.sessions[0]!.revokedAt = now;
+    });
+    await rejects(svc.deleteMe(A, auth, { password: OLD }), "UNAUTHENTICATED");
+    expect(authRepo.users).toHaveLength(1);
+  });
+
+  it("the account deleted mid-delete (a double submit) succeeds", async () => {
+    const svc = staleRead(() => {
+      authRepo.users.splice(0, 1);
+    });
+    await expect(svc.deleteMe(A, auth, { password: OLD })).resolves.toBeUndefined();
   });
 });

@@ -8,6 +8,7 @@ export const APP_NAMESPACE = "/api/v1/x/";
 
 export const STARTER_ROUTES: readonly string[] = [
   "DELETE /api/v1/auth/sessions/{id}",
+  "DELETE /api/v1/users/me",
   "GET /api/v1/app/config",
   "GET /api/v1/auth/me",
   "GET /api/v1/auth/sessions",
