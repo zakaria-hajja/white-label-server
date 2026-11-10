@@ -1,5 +1,183 @@
 # Architecture
 
+## Overview
+
+A multi-tenant REST API (Next.js 16 route handlers, TypeScript, Prisma 7, PostgreSQL) for white-label
+mobile apps. Each client app (one Android build per brand) talks to the same code base; the contract is
+the committed [`openapi/openapi.json`](../openapi/openapi.json) (see [api.md](./api.md)).
+
+One image runs in two modes, chosen by `DEPLOYMENT_MODE` at startup:
+
+- **Shared:** one instance and one database serve many tenants; each request names its tenant with
+  `X-Client-Id` (the tenant slug), and after login the tenant is the signed `tid` claim.
+  See [deployment-shared.md](./deployment-shared.md).
+- **Dedicated:** one deployment (own database, `JWT_SECRET`, domain) serves exactly one tenant, fixed by
+  `DEDICATED_TENANT_SLUG`. See [deployment-dedicated.md](./deployment-dedicated.md).
+
+```mermaid
+flowchart LR
+    subgraph Shared
+      A1[Acme app<br/>X-Client-Id: acme] --> LB[Load balancer]
+      A2[Globex app<br/>X-Client-Id: globex] --> LB
+      LB --> I1[API instance] --> DB[(PostgreSQL<br/>tenants: acme, globex)]
+      LB --> I2[API instance] --> DB
+    end
+    subgraph Dedicated
+      B1[Acme app] --> D1[api.acme.com<br/>DEDICATED_TENANT_SLUG=acme] --> DBA[(acme DB)]
+      B2[Globex app] --> D2[api.globex.com<br/>DEDICATED_TENANT_SLUG=globex] --> DBG[(globex DB)]
+    end
+```
+
+## Folder structure
+
+```
+src/
+  app/api/v1/        route.ts files only (thin: each is a route({...}) call)
+  instrumentation*.ts startup config validation
+  core/
+    config/          env schema, loadConfig()
+    container.ts     composition root (wires repositories, services, caches)
+    database/        Prisma client factory, Prisma error mapping
+    errors/          AppError, error codes -> HTTP status
+    http/            route() pipeline, envelopes, request id, client IP, body reader, health DTO
+    logging/         pino logger with redaction
+    rate-limit/      RateLimiter interface + in-memory fixed-window implementation
+    tenant/          TenantContext, shared/dedicated resolvers, tenant repository + cache, admin service
+    auth/            JWT, password hashing, opaque tokens, per-request session check
+    validation/      common Zod schemas (email, password, uuid, pagination)
+    openapi/         registry, shared components, system routes
+  modules/           auth, users, settings, catalog, app-config, mail
+  shared/            tiny pure helpers (clock)
+  generated/prisma/  generated Prisma client (do not edit)
+prisma/              schema.prisma, migrations/, seed.ts
+scripts/             generate-openapi.ts, tenant.ts (operator CLI), commit/CI helpers
+openapi/             openapi.json (generated, committed)
+tests/               unit/, integration/, helpers/, setup/
+docs/                this documentation
+docker/              postgres-init.sql (local databases)
+```
+
+A request flows `route.ts` -> `route()` (tenant, auth, parse, rate limit) -> `<module>.handlers.ts` ->
+`<module>.service.ts` -> `<module>.repository.ts` -> Prisma.
+
+## Module boundaries
+
+| Module | Owns | Does not own |
+| --- | --- | --- |
+| `core/config` | Parse and validate env; typed `AppConfig` | Business rules |
+| `core/tenant` | `TenantContext`; shared and dedicated resolvers; tenant lookup with 30 s cache; tenant admin service (used by the CLI) | Tenant CRUD over HTTP (none exists) |
+| `core/auth` | Sign/verify access JWTs; hash/verify passwords; opaque tokens; per-request session check | Login and registration flows |
+| `core/http` | `route()` pipeline; success/error envelopes; request id; client IP | Business logic |
+| `core/rate-limit` | `RateLimiter` interface; in-memory fixed window | Distributed limiting (swap in Redis behind the interface) |
+| `modules/auth` | Register, login, refresh rotation and reuse detection, logout, forgot/reset password, sessions, lockout | Profile edits |
+| `modules/users` | Own profile, change password | Tokens |
+| `modules/settings` | Per-user theme, language, notification preferences (created lazily with defaults) | App-wide defaults |
+| `modules/catalog` | Tenant-scoped list (page, search, filter, sort) and detail; the template for new modules | - |
+| `modules/app-config` | Public per-tenant config document (validated JSON, allowlisted output) and feature flags | Android build-time branding |
+| `modules/mail` | `Mailer` interface, `ConsoleMailer` | A real provider (none yet) |
+
+Rules: handlers contain no tenancy logic; services receive the `TenantContext` explicitly; only
+repositories touch Prisma; DTO mappers are explicit allowlists. See [adding-a-module.md](./adding-a-module.md).
+
+## Data model
+
+Matches `prisma/schema.prisma`. Every tenant-owned table carries `tenant_id`; child tables reference
+`(tenant_id, id)` of `users` with composite foreign keys so a row can never point at another tenant's user.
+
+```mermaid
+erDiagram
+    Tenant ||--o{ User : has
+    Tenant ||--o{ Session : has
+    Tenant ||--o{ PasswordResetToken : has
+    Tenant ||--o{ UserSettings : has
+    Tenant ||--o{ CatalogItem : has
+    Tenant ||--o| ApplicationConfiguration : has
+    Tenant ||--o{ FeatureFlag : has
+    User ||--o{ Session : "has (tenantId,userId)"
+    User ||--o{ PasswordResetToken : "has (tenantId,userId)"
+    User ||--o| UserSettings : "has (tenantId,userId)"
+    Session ||--o{ RefreshToken : rotates
+
+    Tenant {
+        uuid id PK
+        string slug UK
+        string name
+        enum status "ACTIVE|SUSPENDED"
+        datetime createdAt
+        datetime updatedAt
+    }
+    User {
+        uuid id PK
+        uuid tenantId FK
+        string email "unique with tenantId"
+        string passwordHash
+        string firstName "nullable"
+        string lastName "nullable"
+        enum status "ACTIVE|DISABLED"
+        int failedLoginCount
+        datetime lockedUntil "nullable"
+        datetime passwordChangedAt
+    }
+    Session {
+        uuid id PK
+        uuid tenantId FK
+        uuid userId FK
+        string userAgent "nullable"
+        string ipAddress "nullable"
+        datetime lastUsedAt
+        datetime expiresAt
+        datetime revokedAt "nullable"
+        string revokedReason "nullable"
+    }
+    RefreshToken {
+        uuid id PK
+        uuid sessionId FK
+        string tokenHash UK
+        datetime expiresAt
+        datetime usedAt "nullable"
+    }
+    PasswordResetToken {
+        uuid id PK
+        uuid tenantId FK
+        uuid userId FK
+        string tokenHash UK
+        datetime expiresAt
+        datetime usedAt "nullable"
+    }
+    UserSettings {
+        uuid id PK
+        uuid tenantId FK
+        uuid userId FK "unique"
+        enum theme "SYSTEM|LIGHT|DARK"
+        string language
+        json notificationPreferences
+    }
+    CatalogItem {
+        uuid id PK
+        uuid tenantId FK
+        string title
+        string description "nullable"
+        string category "nullable"
+        string imageUrl "nullable"
+    }
+    ApplicationConfiguration {
+        uuid id PK
+        uuid tenantId FK "unique"
+        json configuration
+        int version
+    }
+    FeatureFlag {
+        uuid id PK
+        uuid tenantId FK
+        string key "unique with tenantId"
+        boolean enabled
+    }
+```
+
+A `Session` is the revocable unit (one per login); each refresh rotation adds a `RefreshToken` row to the
+same session and marks the previous one used. Ids are UUIDv7. `RefreshToken` has no tenant column: it is
+reached only through its session, which is tenant-scoped.
+
 ## Tenant resolution
 
 Every request is bound to exactly one tenant before any business code runs. Client input is never
@@ -166,3 +344,18 @@ no rate limit of their own.
   higher. Account lockout is in the database and is not affected.
 - Forgot-password has a timing difference (an existing account does database writes and a mail send).
   Send the mail asynchronously before a real mail provider is added; the current console mailer only logs.
+
+## Follow-up: Postgres row-level security
+
+Not built; app-level scoping plus composite foreign keys are the current isolation. Plan for adding RLS
+as defense in depth:
+
+1. Use two roles: a migration owner role, and a non-owner, non-`BYPASSRLS` app role the server connects as.
+2. Add `ENABLE` and `FORCE ROW LEVEL SECURITY` plus a policy `USING (tenant_id = current_setting('app.tenant_id')::uuid)`
+   on every table with `tenant_id`; give `refresh_tokens` a policy through its session.
+3. Run every request's queries inside one interactive transaction that starts with
+   `SELECT set_config('app.tenant_id', $1, true)` (equivalent to `SET LOCAL`). This is the real cost:
+   repositories must take a transaction client, and pre-tenant lookups (tenant by slug, refresh-token
+   lookup by hash) need a deliberately scoped exemption.
+4. Run the existing isolation suites with RLS on, then add tests that query without setting the variable
+   and expect zero rows.

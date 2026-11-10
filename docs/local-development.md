@@ -88,7 +88,7 @@ If the database is unreachable the endpoint returns HTTP 503 instead.
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run test:unit` | unit tests (no database needed) |
 | `npm run test:int:shared` | integration tests, shared mode (needs Postgres running) |
-| `npm run test:int:dedicated` | integration tests, dedicated mode (no test files yet) |
+| `npm run test:int:dedicated` | integration tests, dedicated mode (needs Postgres running) |
 | `npm run build` | production build |
 
 ## Resetting the test databases

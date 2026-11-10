@@ -16,11 +16,24 @@ invalid.
 | `ACCESS_TOKEN_TTL_SECONDS` | never | `900` | integer 60 to 3600 | |
 | `REFRESH_SESSION_TTL_DAYS` | never | `30` | integer 1 to 365 | |
 | `PASSWORD_RESET_TTL_MINUTES` | never | `30` | integer 5 to 1440 | |
-| `TRUST_PROXY` | never | `false` | `true`, `false` | If `true`, client IP is taken from the first `X-Forwarded-For` hop. Enable only behind a trusted proxy. |
+| `TRUST_PROXY` | never | `false` | `true`, `false` | If `true`, client IP is taken from the first `X-Forwarded-For` hop (falling back to `X-Real-IP`). Enable only behind a trusted proxy; otherwise IP-based rate limits are skipped. |
 | `LOG_LEVEL` | never | `info` | non-empty string (pino level) | |
 | `MAILER` | never | `console` | `console` | `console` logs reset links only when `NODE_ENV` is not `production`. |
 | `MAX_BODY_BYTES` | never | `65536` | integer 1 to 10485760 (10 MiB) | Maximum request body size; values above 10 MiB are rejected at startup. |
 | `NODE_ENV` | never | `development` | non-empty string | Set to `production` in production. |
+
+## Tooling-only variables
+
+Not read by the server (`src/core/config/env.ts` does not know them).
+
+| Var | Used by | Default | Notes |
+|---|---|---|---|
+| `SHADOW_DATABASE_URL` | `prisma.config.ts`, for `prisma migrate diff --from-migrations` (the CI drift check) | unset | Points at an empty scratch database. CI uses `whitelabel_shadow`. |
+| `API_PORT` | `docker-compose.yml` (`--profile app`) | `3000` | Host port mapped to the API container's port 3000. |
+| `PORT`, `HOSTNAME` | the runtime image (`next start` / `server.js`) | `3000`, `0.0.0.0` | Set in the Dockerfile; the container always listens on 3000. |
+
+The integration test projects set their own `DEPLOYMENT_MODE`, `DATABASE_URL` and `JWT_SECRET` in
+`vitest.config.ts`; see [testing.md](./testing.md).
 
 ## Examples
 
