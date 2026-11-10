@@ -19,7 +19,12 @@ import {
   resetPasswordRateLimit,
 } from "./auth.handlers";
 import { SessionDtoSchema, UserDtoSchema } from "./user.dto";
-import { authBodyExamples, authErrorExamples, authExamples } from "./auth.examples";
+import {
+  authBodyExamples,
+  authInvalidExamples,
+  authErrorExamples,
+  authExamples,
+} from "./auth.examples";
 
 export const User = registry.register("UserDto", UserDtoSchema);
 const TokenPair = registry.register("TokenPair", TokenPairSchema);
@@ -56,6 +61,7 @@ registerOperation({
   auth: "none",
   body: registerBody,
   bodyExample: authBodyExamples.register,
+  invalidExample: authInvalidExamples.register,
   rateLimit: registerRateLimit,
   success: [
     {
@@ -79,6 +85,7 @@ registerOperation({
   auth: "none",
   body: loginBody,
   bodyExample: authBodyExamples.login,
+  invalidExample: authInvalidExamples.login,
   rateLimit: loginRateLimit,
   success: [
     {
@@ -103,6 +110,7 @@ registerOperation({
   auth: "none",
   body: refreshBody,
   bodyExample: authBodyExamples.refresh,
+  invalidExample: authInvalidExamples.refresh,
   rateLimit: refreshRateLimit,
   success: [
     {
@@ -125,6 +133,7 @@ registerOperation({
   auth: "none",
   body: logoutBody,
   bodyExample: authBodyExamples.logout,
+  invalidExample: authInvalidExamples.logout,
   success: [
     {
       status: 200,
@@ -145,6 +154,7 @@ registerOperation({
   auth: "none",
   body: forgotPasswordBody,
   bodyExample: authBodyExamples.forgotPassword,
+  invalidExample: authInvalidExamples.forgotPassword,
   rateLimit: forgotPasswordRateLimit,
   success: [
     { status: 202, description: "Accepted", schema: EmptyEnvelope, example: authExamples.empty },
@@ -162,6 +172,7 @@ registerOperation({
   auth: "none",
   body: resetPasswordBody,
   bodyExample: authBodyExamples.resetPassword,
+  invalidExample: authInvalidExamples.resetPassword,
   rateLimit: resetPasswordRateLimit,
   success: [
     {

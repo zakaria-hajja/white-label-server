@@ -1,6 +1,8 @@
 import { z, type ZodType } from "zod";
 import type { ResponseConfig, RouteConfig } from "@asteasolutions/zod-to-openapi";
 import { ERROR_STATUS, type ErrorCode } from "../errors/codes";
+import { VALIDATION_MESSAGE, validationDetails } from "../http/validation-error";
+import { exampleError } from "./fixtures";
 import { operations, registry, type OperationDef } from "./registry";
 import { errorExamples } from "./system.examples";
 
@@ -122,12 +124,12 @@ export function errorStatuses(op: OperationDef): number[] {
 }
 
 /** The example for one error status: the op's override, else a default, else none. */
-function errorExample(op: OperationDef, status: number): unknown {
+function errorExample(op: OperationDef, status: number, invalid: unknown): unknown {
   const override = op.errorExamples?.[status];
   if (override !== undefined) return override;
   if (status === 400) {
     // Path params are plain strings (a malformed id is 404), so only a body or query can fail.
-    if (op.body || op.query) return errorExamples.validation;
+    if (op.body || op.query) return invalid;
     // With a token the tenant comes from the token; only dedicated mode's header check can 400.
     return op.auth === "required" ? errorExamples.unknownClient : errorExamples.invalidClient;
   }
@@ -139,7 +141,16 @@ function errorExample(op: OperationDef, status: number): unknown {
   return undefined;
 }
 
-function errorResponse(op: OperationDef, status: number): ResponseConfig {
+/** The real VALIDATION_ERROR envelope for the op's `invalidExample` (checked to fail at registration). */
+function validationExample(op: OperationDef): unknown {
+  const parsed = ((op.body ?? op.query) as ZodType).safeParse(op.invalidExample);
+  if (parsed.success) {
+    throw new Error(`${op.operationId}: invalidExample must fail validation, but it parses`);
+  }
+  return exampleError("VALIDATION_ERROR", VALIDATION_MESSAGE, validationDetails(parsed.error));
+}
+
+function errorResponse(op: OperationDef, status: number, invalid: unknown): ResponseConfig {
   const requestId = { $ref: "#/components/headers/XRequestId" };
   let description = `${STATUS_TEXT[status] ?? "Error"}. Possible codes: ${codesFor(status).join(", ")}.`;
   const headers: NonNullable<ResponseConfig["headers"]> = { "X-Request-Id": requestId };
@@ -150,7 +161,7 @@ function errorResponse(op: OperationDef, status: number): ResponseConfig {
       .join("; ");
     description += ` Limits (per instance): ${limits}.`;
   }
-  const example = errorExample(op, status);
+  const example = errorExample(op, status, invalid);
   return {
     description,
     headers,
@@ -165,6 +176,11 @@ export function registerOperation(op: OperationDef): void {
   if (op.body && op.bodyExample === undefined) {
     throw new Error(`${op.operationId}: an operation with a body needs a bodyExample`);
   }
+  if ((op.body || op.query) && op.invalidExample === undefined) {
+    throw new Error(`${op.operationId}: an operation with a body or query needs an invalidExample`);
+  }
+  // Built now so an invalidExample that parses throws before anything is registered.
+  const invalidInput = op.body || op.query ? validationExample(op) : undefined;
   operations.push(op);
   const responses: RouteConfig["responses"] = {};
   for (const s of op.success) {
@@ -177,7 +193,9 @@ export function registerOperation(op: OperationDef): void {
       content: { "application/json": { schema: s.schema, example: s.example } },
     };
   }
-  for (const status of errorStatuses(op)) responses[status] = errorResponse(op, status);
+  for (const status of errorStatuses(op)) {
+    responses[status] = errorResponse(op, status, invalidInput);
+  }
 
   registry.registerPath({
     method: op.method,

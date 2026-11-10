@@ -44,6 +44,12 @@ export type OperationDef = {
   /** Required when `body` is set (registration throws otherwise); must parse with `body`. */
   bodyExample?: unknown;
   query?: ZodType;
+  /**
+   * Required when `body` or `query` is set: an input (the body, else the query as string values)
+   * that fails validation. The 400 example is the real VALIDATION_ERROR for it; registration
+   * throws if it parses.
+   */
+  invalidExample?: unknown;
   params?: ZodType;
   rateLimit?: RateLimitRule[];
   /** The first entry is the primary success response. */
@@ -51,8 +57,8 @@ export type OperationDef = {
   /** Error statuses this operation can return beyond the ones derived from its config. */
   extraErrors?: number[];
   /**
-   * Error-envelope examples by status, overriding the defaults (400 VALIDATION_ERROR or
-   * INVALID_CLIENT, 401 UNAUTHENTICATED, 429 RATE_LIMITED). Required for a 401 on a public operation.
+   * Error-envelope examples by status, overriding the defaults (400 VALIDATION_ERROR for
+   * `invalidExample` or INVALID_CLIENT, 401 UNAUTHENTICATED, 429 RATE_LIMITED). Required for a 401 on a public operation.
    */
   errorExamples?: Partial<Record<number, unknown>>;
 };

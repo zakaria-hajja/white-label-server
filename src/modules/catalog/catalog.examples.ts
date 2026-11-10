@@ -35,3 +35,6 @@ export const catalogExamples = {
   }),
   item: exampleEnvelope(toCatalogItemDto(first)),
 };
+
+/** A query (string values, as in the URL) that fails validation; the 400 example is its real error. */
+export const catalogListInvalidQuery = { pageSize: "500" };

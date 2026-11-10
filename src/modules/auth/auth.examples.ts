@@ -80,3 +80,13 @@ export const authErrorExamples = {
   login: { 401: errorExamples.invalidCredentials },
   refresh: { 401: errorExamples.invalidRefreshToken },
 };
+
+/** Inputs that fail validation; the 400 examples are the real VALIDATION_ERROR for each. */
+export const authInvalidExamples = {
+  register: { email: "alice@", password: "short" },
+  login: { email: "alice", password: "correct-horse-battery" },
+  refresh: { refreshToken: "" },
+  logout: { refreshToken: "" },
+  forgotPassword: { email: "" },
+  resetPassword: { token: authBodyExamples.resetPassword.token, newPassword: "short" },
+};

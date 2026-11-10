@@ -3,7 +3,7 @@ import { registry, TAGS } from "@/core/openapi/registry";
 import { zIdParams } from "@/core/validation/common";
 import { CatalogItemDtoSchema } from "./catalog.dto";
 import { CatalogListQuerySchema } from "./catalog.schemas";
-import { catalogExamples } from "./catalog.examples";
+import { catalogExamples, catalogListInvalidQuery } from "./catalog.examples";
 
 const Item = registry.register("CatalogItemDto", CatalogItemDtoSchema);
 export const CatalogListEnvelope = PaginatedEnvelope("CatalogListEnvelope", Item);
@@ -22,6 +22,7 @@ registerOperation({
   operationId: "catalogList",
   summary: "List catalog items (paginated)",
   query: CatalogListQuerySchema,
+  invalidExample: catalogListInvalidQuery,
   success: [
     {
       status: 200,

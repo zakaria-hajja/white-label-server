@@ -178,8 +178,11 @@ be in it. Nothing is written by hand: the spec is built from the Zod schemas the
    `exampleError`) by calling the module's **real** mapper, never by writing the DTO out by hand, and
    never with the clock or random values (the spec must regenerate byte-identically). If the DTO comes
    from a service, extract its pure "build the DTO" step into an exported function and use that. Request
-   body examples are hand-written. The 400, 401 and 429 error examples are derived; a public operation
-   that can return 401 sets `errorExamples: { 401: ... }`.
+   body examples are hand-written. Every operation with a `body` or `query` also needs an
+   `invalidExample`: a body (or query, with string values as in the URL) that fails validation, such
+   as a too-short password. Its 400 example is the real `VALIDATION_ERROR` for that input, and
+   registration throws when it is missing or parses. The other 400, 401 and 429 error examples are
+   derived; a public operation that can return 401 sets `errorExamples: { 401: ... }`.
 
    Use `SuccessEnvelope(name, dataSchema)` for single values and `PaginatedEnvelope(name, itemSchema)`
    for lists. `tests/unit/openapi/contract.test.ts` requires `auth`, `tenant`, `body`, `query`,

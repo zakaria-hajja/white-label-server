@@ -15,3 +15,10 @@ export const usersExamples = {
   user: exampleEnvelope(toUserDto(authFixtures.user)),
   updated: exampleEnvelope(toUserDto({ ...authFixtures.user, ...usersBodyExamples.updateMe })),
 };
+
+/** Inputs that fail validation; the 400 examples are the real VALIDATION_ERROR for each. */
+export const usersInvalidExamples = {
+  updateMe: { firstName: "" },
+  changePassword: { currentPassword: "correct-horse-battery", newPassword: "short" },
+  deleteMe: { password: "" },
+};

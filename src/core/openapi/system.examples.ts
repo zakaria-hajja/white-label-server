@@ -7,9 +7,6 @@ export const healthExamples = {
 
 /** Error envelopes as the server writes them (messages copied from where each code is thrown). */
 export const errorExamples = {
-  validation: exampleError("VALIDATION_ERROR", "Request validation failed", [
-    { path: "email", message: "Invalid email address" },
-  ]),
   invalidClient: exampleError("INVALID_CLIENT", "A valid X-Client-Id header is required"),
   unknownClient: exampleError("INVALID_CLIENT", "Unknown client"),
   unauthenticated: exampleError("UNAUTHENTICATED", "UNAUTHENTICATED"),

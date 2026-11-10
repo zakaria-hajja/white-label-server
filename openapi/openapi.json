@@ -632,8 +632,8 @@
                     "code": "VALIDATION_ERROR",
                     "details": [
                       {
-                        "message": "Invalid email address",
-                        "path": "email"
+                        "message": "Too small: expected string to have >=1 characters",
+                        "path": "refreshToken"
                       }
                     ],
                     "message": "Request validation failed"
@@ -925,8 +925,8 @@
                     "code": "VALIDATION_ERROR",
                     "details": [
                       {
-                        "message": "Invalid email address",
-                        "path": "email"
+                        "message": "Too small: expected string to have >=1 characters",
+                        "path": "refreshToken"
                       }
                     ],
                     "message": "Request validation failed"
@@ -1154,6 +1154,10 @@
                       {
                         "message": "Invalid email address",
                         "path": "email"
+                      },
+                      {
+                        "message": "Too small: expected string to have >=10 characters",
+                        "path": "password"
                       }
                     ],
                     "message": "Request validation failed"
@@ -1345,8 +1349,8 @@
                     "code": "VALIDATION_ERROR",
                     "details": [
                       {
-                        "message": "Invalid email address",
-                        "path": "email"
+                        "message": "Too small: expected string to have >=10 characters",
+                        "path": "newPassword"
                       }
                     ],
                     "message": "Request validation failed"
@@ -1866,8 +1870,8 @@
                     "code": "VALIDATION_ERROR",
                     "details": [
                       {
-                        "message": "Invalid email address",
-                        "path": "email"
+                        "message": "Too big: expected number to be <=100",
+                        "path": "pageSize"
                       }
                     ],
                     "message": "Request validation failed"
@@ -2445,8 +2449,8 @@
                     "code": "VALIDATION_ERROR",
                     "details": [
                       {
-                        "message": "Invalid email address",
-                        "path": "email"
+                        "message": "Invalid option: expected one of \"SYSTEM\"|\"LIGHT\"|\"DARK\"",
+                        "path": "theme"
                       }
                     ],
                     "message": "Request validation failed"
@@ -2617,8 +2621,8 @@
                     "code": "VALIDATION_ERROR",
                     "details": [
                       {
-                        "message": "Invalid email address",
-                        "path": "email"
+                        "message": "Too small: expected string to have >=1 characters",
+                        "path": "password"
                       }
                     ],
                     "message": "Request validation failed"
@@ -2961,8 +2965,8 @@
                     "code": "VALIDATION_ERROR",
                     "details": [
                       {
-                        "message": "Invalid email address",
-                        "path": "email"
+                        "message": "Too small: expected string to have >=1 characters",
+                        "path": "firstName"
                       }
                     ],
                     "message": "Request validation failed"
@@ -3140,8 +3144,8 @@
                     "code": "VALIDATION_ERROR",
                     "details": [
                       {
-                        "message": "Invalid email address",
-                        "path": "email"
+                        "message": "Too small: expected string to have >=10 characters",
+                        "path": "newPassword"
                       }
                     ],
                     "message": "Request validation failed"

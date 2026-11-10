@@ -108,8 +108,9 @@ tenant: `npm run tenant -- set-feature --slug <slug> --key profile --enabled tru
 - **Examples.** `tests/unit/openapi/examples.test.ts` parses every example with its schema and checks
   that each error example's code is one the operation can return. `tests/unit/openapi/dto-contract.test.ts`
   checks that each response example equals the real service output on the same fixture (token values,
-  which are random, are swapped for the fixture's). The health and error examples are literals checked
-  only by parsing.
+  which are random, are swapped for the fixture's). Each 400 `VALIDATION_ERROR` example is compared with
+  the real response of `route()` to that operation's `invalidExample`, so its `details` name a field
+  the operation has. The health and other error examples are literals checked only by parsing.
 
 ## What Android depends on
 
