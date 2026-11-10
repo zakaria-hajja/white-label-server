@@ -54,7 +54,7 @@ Contract surface added after `v1.0.0`, by the tag that ships it:
 
 | Tag | Addition |
 | --- | --- |
-| `v1.1.0` | `DELETE /api/v1/users/me` (`usersDeleteMe`): delete the account, confirmed with the password; rate limit `delete-account` |
+| `v1.1.0` | `DELETE /api/v1/users/me` (`usersDeleteMe`): delete the account, confirmed with the password; shares the `password-check` rate limit with change-password (since the next tag; `v1.1.0` had a separate `delete-account` limit) |
 
 ## The app namespace: `/api/v1/x/`
 

@@ -126,7 +126,7 @@ per-user rules.
 ```ts
 { name: "login-ip", limit: 10, windowSeconds: 60, key: ({ ip }) => ipKey(ip) },
 {
-  name: "change-password-account", limit: 5, windowSeconds: 900,
+  name: "password-check", limit: 5, windowSeconds: 900,
   key: ({ tenant, auth }) => (tenant && auth ? `${tenant.tenantId}|${auth.userId}` : null),
 },
 ```

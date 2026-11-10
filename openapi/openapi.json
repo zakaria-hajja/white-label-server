@@ -2713,7 +2713,7 @@
                 }
               }
             },
-            "description": "Too many requests. Possible codes: RATE_LIMITED. Limits (per instance): delete-account: 5 per 900s.",
+            "description": "Too many requests. Possible codes: RATE_LIMITED. Limits (per instance): password-check: 5 per 900s.",
             "headers": {
               "Retry-After": {
                 "$ref": "#/components/headers/RetryAfter"
@@ -3236,7 +3236,7 @@
                 }
               }
             },
-            "description": "Too many requests. Possible codes: RATE_LIMITED. Limits (per instance): change-password-account: 5 per 900s.",
+            "description": "Too many requests. Possible codes: RATE_LIMITED. Limits (per instance): password-check: 5 per 900s.",
             "headers": {
               "Retry-After": {
                 "$ref": "#/components/headers/RetryAfter"
