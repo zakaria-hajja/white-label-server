@@ -32,11 +32,11 @@ export const authFixtures = {
       expiresAt: new Date("2026-01-14T12:00:00.000Z"),
     },
   ],
-  /** Opaque values; a real access token is a JWT, a real refresh token is random base64url. */
+  /** Fixed values in the real shapes: a JWT, and 32 bytes base64url for the refresh token. */
   tokens: {
     accessToken:
       "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwMTk1MDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAxMDEifQ.c2lnbmF0dXJl",
-    refreshToken: "rt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu",
+    refreshToken: "ZXhhbXBsZS1yZWZyZXNoLXRva2VuLW5vdC1yZWFsISE",
     tokenType: "Bearer",
     expiresIn: 900,
   } satisfies TokenPair,
@@ -71,7 +71,7 @@ export const authBodyExamples = {
   logout: { refreshToken: authFixtures.tokens.refreshToken },
   forgotPassword: { email: "alice@shared.test" },
   resetPassword: {
-    token: "prt_Zm9yLWV4YW1wbGUtb25seS1ub3QtYS1yZWFsLXRva2Vu",
+    token: "ZXhhbXBsZS1yZXNldC10b2tlbi1ub3QtYS1yZWFsLTE",
     newPassword: "new-correct-horse-battery",
   },
 };
@@ -79,4 +79,14 @@ export const authBodyExamples = {
 export const authErrorExamples = {
   login: { 401: errorExamples.invalidCredentials },
   refresh: { 401: errorExamples.invalidRefreshToken },
+};
+
+/** Inputs that fail validation; the 400 examples are the real VALIDATION_ERROR for each. */
+export const authInvalidExamples = {
+  register: { email: "alice@", password: "short" },
+  login: { email: "alice", password: "correct-horse-battery" },
+  refresh: { refreshToken: "" },
+  logout: { refreshToken: "" },
+  forgotPassword: { email: "" },
+  resetPassword: { token: authBodyExamples.resetPassword.token, newPassword: "short" },
 };

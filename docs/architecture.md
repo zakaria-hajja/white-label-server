@@ -376,21 +376,21 @@ Rules run in list order and the first rejection stops evaluation, so every list 
 a blocked IP never creates body-keyed (email) buckets. The in-memory limiter holds at most 100,000 keys
 (`maxEntries`); at the cap it drops expired keys, then the oldest ones.
 
-| Rule name                 | Route                      | Limit / window | Key                 |
-| ------------------------- | -------------------------- | -------------- | ------------------- |
-| `register-ip`             | POST /auth/register        | 5 / 1 h        | IP                  |
-| `login-ip`                | POST /auth/login           | 10 / 60 s      | IP                  |
-| `login-account`           | POST /auth/login           | 5 / 60 s       | tenant id + email   |
-| `refresh-ip`              | POST /auth/refresh         | 30 / 60 s      | IP                  |
-| `forgot-ip`               | POST /auth/forgot-password | 10 / 15 min    | IP                  |
-| `forgot-account`          | POST /auth/forgot-password | 3 / 15 min     | tenant id + email   |
-| `reset-ip`                | POST /auth/reset-password  | 10 / 15 min    | IP                  |
-| `change-password-account` | PATCH /users/me/password   | 5 / 15 min     | tenant id + user id |
-| `delete-account`          | DELETE /users/me           | 5 / 15 min     | tenant id + user id |
+| Rule name        | Route                                      | Limit / window | Key                 |
+| ---------------- | ------------------------------------------ | -------------- | ------------------- |
+| `register-ip`    | POST /auth/register                        | 5 / 1 h        | IP                  |
+| `login-ip`       | POST /auth/login                           | 10 / 60 s      | IP                  |
+| `login-account`  | POST /auth/login                           | 5 / 60 s       | tenant id + email   |
+| `refresh-ip`     | POST /auth/refresh                         | 30 / 60 s      | IP                  |
+| `forgot-ip`      | POST /auth/forgot-password                 | 10 / 15 min    | IP                  |
+| `forgot-account` | POST /auth/forgot-password                 | 3 / 15 min     | tenant id + email   |
+| `reset-ip`       | POST /auth/reset-password                  | 10 / 15 min    | IP                  |
+| `password-check` | PATCH /users/me/password, DELETE /users/me | 5 / 15 min     | tenant id + user id |
 
 Differences from the original design: `login-account` is keyed by tenant and email, not IP and email, so
 distributed guessing is also limited; logout, `/auth/me`, sessions and the other `/users/me` routes have
-no rate limit of their own.
+no rate limit of their own. `password-check` is one bucket shared by both routes that check the current
+password, so a stolen access token gets 5 guesses per 15 minutes in total, not 5 per route.
 
 **Security notes**
 

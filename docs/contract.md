@@ -46,7 +46,8 @@ Tags are `vMAJOR.MINOR.PATCH`:
 
 The owner cuts tags on `main`, each with a GitHub release whose notes list the contract additions and
 any migration steps. Android pins a tag for its vendored `api/openapi.json`; each app's backend merges
-tags.
+tags. App backends fetch the starter's tags as `starter/v*`
+([creating-a-backend.md](./creating-a-backend.md#1-create-the-repo)), so their own `v*` tags are free.
 
 ## v1 additions
 
@@ -54,7 +55,7 @@ Contract surface added after `v1.0.0`, by the tag that ships it:
 
 | Tag | Addition |
 | --- | --- |
-| `v1.1.0` | `DELETE /api/v1/users/me` (`usersDeleteMe`): delete the account, confirmed with the password; rate limit `delete-account` |
+| `v1.1.0` | `DELETE /api/v1/users/me` (`usersDeleteMe`): delete the account, confirmed with the password; shares the `password-check` rate limit with change-password (since the next tag; `v1.1.0` had a separate `delete-account` limit) |
 
 ## The app namespace: `/api/v1/x/`
 
@@ -88,7 +89,8 @@ tenant: `npm run tenant -- set-feature --slug <slug> --key profile --enabled tru
   the copy on the PR's base branch (`scripts/check-breaking.sh`, which runs `oasdiff` in breaking mode
   in a pinned container). For stacked PRs the base is the branch below, so each PR is checked against
   what it lands on. If the base has no spec yet (an app backend's first PR), the check passes with a
-  notice. The specs never leave the CI runner.
+  notice; if the base ref can't be read at all, the step fails instead of skipping. The specs never
+  leave the CI runner.
   - oasdiff rates some changes this policy treats as breaking as informational or warnings: removing a
     response enum value (such as an error code), an optional response field, a request field, a
     non-success status, a response header or an `operationId`, and changing a request pattern.
@@ -108,8 +110,9 @@ tenant: `npm run tenant -- set-feature --slug <slug> --key profile --enabled tru
 - **Examples.** `tests/unit/openapi/examples.test.ts` parses every example with its schema and checks
   that each error example's code is one the operation can return. `tests/unit/openapi/dto-contract.test.ts`
   checks that each response example equals the real service output on the same fixture (token values,
-  which are random, are swapped for the fixture's). The health and error examples are literals checked
-  only by parsing.
+  which are random, are swapped for the fixture's). Each 400 `VALIDATION_ERROR` example is compared with
+  the real response of `route()` to that operation's `invalidExample`, so its `details` name a field
+  the operation has. The health and other error examples are literals checked only by parsing.
 
 ## What Android depends on
 

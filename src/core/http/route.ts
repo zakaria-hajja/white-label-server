@@ -10,6 +10,7 @@ import { clientIp } from "./client-ip";
 import { fail } from "./envelope";
 import type { RateLimitRule } from "../rate-limit/rate-limiter";
 import { resolveRequestId } from "./request-id";
+import { validationError } from "./validation-error";
 
 export type TenantMode = "required" | "none";
 
@@ -179,10 +180,7 @@ function extractBearer(header: string | null): string {
 
 function toErrorResponse(err: unknown, requestId: string, logger: Logger): Response {
   if (err instanceof AppError) return fail(err, requestId);
-  if (err instanceof ZodError) {
-    const details = err.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
-    return fail(new AppError("VALIDATION_ERROR", "Request validation failed", details), requestId);
-  }
+  if (err instanceof ZodError) return fail(validationError(err), requestId);
   logger.error({ err }, "unhandled error");
   return fail(new AppError("INTERNAL_ERROR", GENERIC_MESSAGE), requestId);
 }

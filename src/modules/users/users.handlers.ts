@@ -5,25 +5,21 @@ import type { ChangePasswordInput, DeleteMeInput, UpdateMeInput } from "./users.
 
 type Ctx<B = undefined> = RouteContext<B, undefined, undefined, "required", "required">;
 
-export const changePasswordRateLimit: RateLimitRule[] = [
-  // Brute-force protection for the current-password check; per account, not per IP.
+/**
+ * Brute-force protection for the password check on change-password and delete-account; per
+ * account, not per IP. One shared bucket, so both routes together allow 5 guesses per window.
+ */
+const passwordCheckRateLimit: RateLimitRule[] = [
   {
-    name: "change-password-account",
+    name: "password-check",
     limit: 5,
     windowSeconds: 900,
     key: ({ tenant, auth }) => (tenant && auth ? `${tenant.tenantId}|${auth.userId}` : null),
   },
 ];
 
-export const deleteAccountRateLimit: RateLimitRule[] = [
-  // Brute-force protection for the password confirmation; per account, not per IP.
-  {
-    name: "delete-account",
-    limit: 5,
-    windowSeconds: 900,
-    key: ({ tenant, auth }) => (tenant && auth ? `${tenant.tenantId}|${auth.userId}` : null),
-  },
-];
+export const changePasswordRateLimit = passwordCheckRateLimit;
+export const deleteAccountRateLimit = passwordCheckRateLimit;
 
 export async function getMeHandler(c: Ctx): Promise<Response> {
   return ok(await c.container.services.users.getMe(c.tenant, c.auth), { requestId: c.requestId });

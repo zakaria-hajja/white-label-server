@@ -21,13 +21,20 @@ GitHub can't fork a repo into the account that owns it, so this is a clone, not 
    cd showcase-backend
    git switch -c main                    # cloning a tag leaves a detached HEAD
    git remote rename origin starter      # the starter stays reachable as "starter"
+   # Keep the starter's tags under starter/ so the app can have its own v* tags:
+   git tag -l | xargs git tag -d
+   git config remote.starter.tagOpt --no-tags
+   git config --add remote.starter.fetch '+refs/tags/*:refs/tags/starter/*'
+   git fetch starter                     # tags arrive as starter/v1.0.0, starter/v1.1.0, ...
    git remote add origin https://github.com/<owner>/showcase-backend.git
    git push -u origin main
    npm ci                                # also installs the git hooks
    ```
 
 3. `git remote -v` now lists `origin` (your app's backend) and `starter` (this repo). Never push to
-   `starter` from an app's backend.
+   `starter` from an app's backend. The app's own release tags (`v1.0.0`, ...) are its own and never
+   collide with the starter's, which live under `starter/`. Never run `git fetch starter --tags`: it
+   would bring the starter's tags back as plain `v*` tags.
 
 ## 2. Make it yours
 
@@ -41,7 +48,15 @@ GitHub can't fork a repo into the account that owns it, so this is a clone, not 
 
    `DEDICATED_TENANT_SLUG` must equal the Android app's `api.tenant` when the app sets it. Otherwise it
    is any valid slug (2 to 63 lowercase letters, digits or hyphens).
-2. Create the single tenant with the tenant CLI, with its config and flags. `create` switches on the
+2. Start Postgres and apply the migrations; the tenant CLI writes to the database, so it fails on an
+   empty one (details: [local-development.md](./local-development.md)):
+
+   ```bash
+   docker compose up -d postgres
+   npm run db:deploy
+   ```
+
+3. Create the single tenant with the tenant CLI, with its config and flags. `create` switches on the
    starter flags (`catalog`, `profile`); switch off the ones the app doesn't use:
 
    ```bash
@@ -52,7 +67,7 @@ GitHub can't fork a repo into the account that owns it, so this is a clone, not 
    The config JSON is validated against the app-config schema (display name, support, legal links,
    `passwordReset.linkBaseUrl`, runtime defaults, branding). See
    [deployment-dedicated.md](./deployment-dedicated.md#provisioning-a-new-deployment).
-3. For local development, `npm run db:seed` in dedicated mode seeds only `DEDICATED_TENANT_SLUG`, with
+4. For local development, `npm run db:seed` in dedicated mode seeds only `DEDICATED_TENANT_SLUG`, with
    demo users and 25 demo catalog items. Keep the catalog module if the app shows a catalog. If it
    doesn't, switch its flag off; don't delete the module's files, because they are starter files and
    deleting them makes every later starter merge conflict.
@@ -94,9 +109,9 @@ Android build relies on. Don't: propose the change to the starter instead.
 2. Merge the tag:
 
    ```bash
-   git fetch starter --tags
+   git fetch starter                     # updates the starter/ tags
    git switch -c chore/starter-v1.1.0
-   git merge v1.1.0
+   git merge starter/v1.1.0
    ```
 
 3. **Generated files: never hand-merge them.** `openapi/openapi.json` is generated, so it **will**

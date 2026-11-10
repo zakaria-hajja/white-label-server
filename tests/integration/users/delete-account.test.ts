@@ -9,6 +9,7 @@ import { POST as login } from "@/app/api/v1/auth/login/route";
 import { POST as refresh } from "@/app/api/v1/auth/refresh/route";
 import { POST as forgotPassword } from "@/app/api/v1/auth/forgot-password/route";
 import { DELETE as deleteMe, GET as getMe } from "@/app/api/v1/users/me/route";
+import { PATCH as changePassword } from "@/app/api/v1/users/me/password/route";
 import { PATCH as patchSettings } from "@/app/api/v1/settings/route";
 
 const config = loadConfig(process.env);
@@ -169,6 +170,25 @@ describe("DELETE /users/me", () => {
     expect(res.status).toBe(429);
     expect((await envelope(res)).error?.code).toBe("RATE_LIMITED");
     expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(await userExists(alice.userId)).toBe(true);
+  });
+
+  it("wrong change-password guesses count toward the same limit (one budget per account)", async () => {
+    const alice = await signup("alice@x.co");
+    const guess = (pw: string) =>
+      changePassword(
+        req(
+          "PATCH",
+          { currentPassword: pw, newPassword: "brand-new-pass-2" },
+          { token: alice.tokens.accessToken },
+        ),
+        noParams,
+      );
+    for (let i = 0; i < 3; i++) expect((await guess("wrong-password-1")).status).toBe(401);
+    for (let i = 0; i < 2; i++) {
+      expect((await del(alice.tokens, { password: "wrong-password-1" })).status).toBe(401);
+    }
+    expect((await del(alice.tokens)).status).toBe(429);
     expect(await userExists(alice.userId)).toBe(true);
   });
 });

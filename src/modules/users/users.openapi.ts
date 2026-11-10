@@ -3,7 +3,7 @@ import { TAGS } from "@/core/openapi/registry";
 import { EmptyEnvelope, User } from "../auth/auth.openapi";
 import { changePasswordRateLimit, deleteAccountRateLimit } from "./users.handlers";
 import { changePasswordBody, deleteMeBody, updateMeBody } from "./users.schemas";
-import { usersBodyExamples, usersExamples } from "./users.examples";
+import { usersBodyExamples, usersInvalidExamples, usersExamples } from "./users.examples";
 import { authExamples } from "../auth/auth.examples";
 
 export const UserEnvelope = SuccessEnvelope("UserEnvelope", User);
@@ -29,6 +29,7 @@ registerOperation({
   description: "Send at least one of firstName, lastName; null clears a name.",
   body: updateMeBody,
   bodyExample: usersBodyExamples.updateMe,
+  invalidExample: usersInvalidExamples.updateMe,
   success: [
     {
       status: 200,
@@ -49,6 +50,7 @@ registerOperation({
     "A wrong current password is INVALID_CREDENTIALS (401). On success every other session of the user is revoked; the caller's session and tokens stay valid.",
   body: changePasswordBody,
   bodyExample: usersBodyExamples.changePassword,
+  invalidExample: usersInvalidExamples.changePassword,
   rateLimit: changePasswordRateLimit,
   success: [
     {
@@ -72,6 +74,7 @@ registerOperation({
     "Afterwards the old access and refresh tokens are rejected, and the email can register again.",
   body: deleteMeBody,
   bodyExample: usersBodyExamples.deleteMe,
+  invalidExample: usersInvalidExamples.deleteMe,
   rateLimit: deleteAccountRateLimit,
   success: [
     {

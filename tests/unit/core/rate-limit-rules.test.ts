@@ -17,7 +17,7 @@ import {
   registerRateLimit,
   resetPasswordRateLimit,
 } from "@/modules/auth/auth.handlers";
-import { changePasswordRateLimit } from "@/modules/users/users.handlers";
+import { changePasswordRateLimit, deleteAccountRateLimit } from "@/modules/users/users.handlers";
 
 const config = loadConfig({
   DEPLOYMENT_MODE: "shared",
@@ -79,6 +79,23 @@ describe("rate-limit rules", () => {
     const flags = rules.map(isIpRule);
     const firstOther = flags.indexOf(false);
     if (firstOther !== -1) expect(flags.slice(firstOther)).not.toContain(true);
+  });
+
+  it("change-password and delete-account share one password-guess budget per account", () => {
+    // Both routes check the password; separate buckets would give an attacker 5 + 5 guesses.
+    const c = {
+      ip: "1.2.3.4",
+      body: {},
+      tenant,
+      auth: { userId: "u", tenantId: "t1", sessionId: "s" },
+    };
+    const buckets = (rules: RateLimitRule[]) =>
+      rules.map((r) => ({
+        bucket: `${r.name}:${r.key(c)}`,
+        limit: r.limit,
+        window: r.windowSeconds,
+      }));
+    expect(buckets(deleteAccountRateLimit)).toEqual(buckets(changePasswordRateLimit));
   });
 
   it("route() stops at the first rejected rule", async () => {

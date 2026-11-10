@@ -1,7 +1,7 @@
 import { SuccessEnvelope, registerOperation } from "@/core/openapi/components";
 import { registry, TAGS } from "@/core/openapi/registry";
 import { SettingsDtoSchema, updateSettingsBody } from "./settings.schemas";
-import { settingsBodyExample, settingsExamples } from "./settings.examples";
+import { settingsBodyExample, settingsInvalidExample, settingsExamples } from "./settings.examples";
 
 export const SettingsEnvelope = SuccessEnvelope(
   "SettingsEnvelope",
@@ -37,6 +37,7 @@ registerOperation({
     "(see GET /app/config), otherwise VALIDATION_ERROR.",
   body: updateSettingsBody,
   bodyExample: settingsBodyExample,
+  invalidExample: settingsInvalidExample,
   success: [
     {
       status: 200,

@@ -1,11 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // Must stay first: the registry module runs extendZodWithOpenApi() before any schema is built.
 import "@/core/openapi/registry";
-import type { ZodType } from "zod";
+import { z, type ZodType } from "zod";
 import { ERROR_STATUS, type ErrorCode } from "@/core/errors/codes";
-import { ErrorEnvelope } from "@/core/openapi/components";
+import { generateOpaqueToken } from "@/core/auth/tokens";
+import { loadConfig } from "@/core/config/env";
+import { createContainer, setContainer } from "@/core/container";
+import type { PrismaClient } from "@/core/database/prisma";
+import { route } from "@/core/http/route";
+import { createLogger } from "@/core/logging/logger";
+import { FIXTURE_REQUEST_ID } from "@/core/openapi/fixtures";
+import { ErrorEnvelope, registerOperation } from "@/core/openapi/components";
 import { buildOpenApiDocument } from "@/core/openapi/document";
 import { operations, type OperationDef } from "@/core/openapi/registry";
+import { authBodyExamples, authFixtures } from "@/modules/auth/auth.examples";
 
 type Media = { schema: unknown; example?: unknown };
 type Operation = {
@@ -106,6 +114,82 @@ describe("OpenAPI examples", () => {
         expect(e.message, label(op)).toBe("Unknown client");
       }
     }
+  });
+
+  it("opaque token examples look like real tokens (32 random bytes, base64url)", () => {
+    const shape = (t: string) => ({ length: t.length, base64url: /^[A-Za-z0-9_-]+$/.test(t) });
+    const real = shape(generateOpaqueToken());
+    expect(shape(authFixtures.tokens.refreshToken)).toEqual(real);
+    expect(shape(authBodyExamples.resetPassword.token)).toEqual(real);
+  });
+
+  describe("400 VALIDATION_ERROR examples are the real response to the op's invalidExample", () => {
+    beforeAll(() => {
+      const config = loadConfig({
+        DEPLOYMENT_MODE: "shared",
+        DATABASE_URL: "postgresql://x:y@localhost:5432/none",
+        JWT_SECRET: "test-jwt-secret-test-jwt-secret-0123456789",
+        LOG_LEVEL: "silent",
+      });
+      setContainer(
+        createContainer(config, { prisma: {} as PrismaClient, logger: createLogger("silent") }),
+      );
+    });
+    afterAll(() => setContainer(null));
+
+    it.each(operations.filter((op) => op.body || op.query).map((op) => [label(op), op] as const))(
+      "%s",
+      async (_, op) => {
+        expect(op.invalidExample, "invalidExample").toBeDefined();
+        // Same body/query schema as the real route; tenant and auth are not what is under test.
+        const h = route({
+          auth: "none",
+          tenant: "none",
+          ...(op.body ? { body: op.body } : { query: op.query }),
+          handler: async () => Response.json({}),
+        });
+        const url = new URL(`http://localhost${op.path}`);
+        if (!op.body) {
+          for (const [k, v] of Object.entries(op.invalidExample as Record<string, string>)) {
+            url.searchParams.set(k, v);
+          }
+        }
+        const res = await h(
+          new Request(url, {
+            method: op.method.toUpperCase(),
+            headers: { "content-type": "application/json", "x-request-id": FIXTURE_REQUEST_ID },
+            ...(op.body ? { body: JSON.stringify(op.invalidExample) } : {}),
+          }),
+          { params: Promise.resolve({}) },
+        );
+        expect(res.status).toBe(400);
+        expect(await res.json()).toEqual(
+          opDoc(op).responses["400"]?.content?.["application/json"]?.example,
+        );
+      },
+    );
+  });
+
+  it("registration rejects a missing or valid invalidExample, before registering anything", () => {
+    const body = z.object({ name: z.string().min(1) }).strict();
+    const def: OperationDef = {
+      method: "post",
+      path: "/api/v1/x/probe",
+      operationId: "probe",
+      tag: "System",
+      summary: "probe",
+      auth: "none",
+      tenant: "none",
+      body,
+      bodyExample: { name: "a" },
+      success: [{ status: 200, description: "ok", schema: z.object({}), example: {} }],
+    };
+    const before = operations.length;
+    expect(() => registerOperation(def)).toThrow(/needs an invalidExample/);
+    expect(() => registerOperation({ ...def, invalidExample: { name: "a" } })).toThrow(
+      /must fail validation/,
+    );
+    expect(operations.length).toBe(before);
   });
 
   it("is deterministic: building the document twice gives identical examples", () => {
