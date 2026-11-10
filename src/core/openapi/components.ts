@@ -126,9 +126,10 @@ function errorExample(op: OperationDef, status: number): unknown {
   const override = op.errorExamples?.[status];
   if (override !== undefined) return override;
   if (status === 400) {
-    return op.body || op.query || op.params
-      ? errorExamples.validation
-      : errorExamples.invalidClient;
+    // Path params are plain strings (a malformed id is 404), so only a body or query can fail.
+    if (op.body || op.query) return errorExamples.validation;
+    // With a token the tenant comes from the token; only dedicated mode's header check can 400.
+    return op.auth === "required" ? errorExamples.unknownClient : errorExamples.invalidClient;
   }
   if (status === 401) {
     if (op.auth === "required") return errorExamples.unauthenticated;

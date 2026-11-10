@@ -765,7 +765,7 @@
                 "example": {
                   "error": {
                     "code": "INVALID_CLIENT",
-                    "message": "A valid X-Client-Id header is required"
+                    "message": "Unknown client"
                   },
                   "meta": {
                     "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
@@ -1506,7 +1506,7 @@
                 "example": {
                   "error": {
                     "code": "INVALID_CLIENT",
-                    "message": "A valid X-Client-Id header is required"
+                    "message": "Unknown client"
                   },
                   "meta": {
                     "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
@@ -1641,14 +1641,8 @@
               "application/json": {
                 "example": {
                   "error": {
-                    "code": "VALIDATION_ERROR",
-                    "details": [
-                      {
-                        "message": "Invalid email address",
-                        "path": "email"
-                      }
-                    ],
-                    "message": "Request validation failed"
+                    "code": "INVALID_CLIENT",
+                    "message": "Unknown client"
                   },
                   "meta": {
                     "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
@@ -2035,14 +2029,8 @@
               "application/json": {
                 "example": {
                   "error": {
-                    "code": "VALIDATION_ERROR",
-                    "details": [
-                      {
-                        "message": "Invalid email address",
-                        "path": "email"
-                      }
-                    ],
-                    "message": "Request validation failed"
+                    "code": "INVALID_CLIENT",
+                    "message": "Unknown client"
                   },
                   "meta": {
                     "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
@@ -2275,7 +2263,7 @@
                 "example": {
                   "error": {
                     "code": "INVALID_CLIENT",
-                    "message": "A valid X-Client-Id header is required"
+                    "message": "Unknown client"
                   },
                   "meta": {
                     "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"
@@ -2609,7 +2597,7 @@
                 "example": {
                   "error": {
                     "code": "INVALID_CLIENT",
-                    "message": "A valid X-Client-Id header is required"
+                    "message": "Unknown client"
                   },
                   "meta": {
                     "requestId": "0b8f5c3e-6d1a-4f4e-9a57-2c1d3e4f5a6b"

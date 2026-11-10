@@ -31,7 +31,8 @@ import type { AppConfigReader } from "@/modules/app-config/app-config.reader";
 import { HealthEnvelope } from "@/core/openapi/system.openapi";
 import { FIXTURE_IDS, FIXTURE_NOW, FIXTURE_TENANT } from "@/core/openapi/fixtures";
 import { appConfigExample, appConfigFixtures } from "@/modules/app-config/app-config.examples";
-import { authExamples, authFixtures } from "@/modules/auth/auth.examples";
+import { authBodyExamples, authExamples, authFixtures } from "@/modules/auth/auth.examples";
+import { hashPassword } from "@/core/auth/password";
 import { catalogExamples, catalogFixtures } from "@/modules/catalog/catalog.examples";
 import {
   settingsBodyExample,
@@ -232,6 +233,40 @@ describe("spec examples equal the real service output on their fixtures", () => 
     const service = new AuthService(authRepo(), cfg, fixedClock, resetDeps);
     expect(await service.me(ctx, auth)).toEqual(authExamples.me.data);
     expect({ sessions: await service.listSessions(ctx, auth) }).toEqual(authExamples.sessions.data);
+  });
+
+  it("register, login and refresh results (token values are opaque, so they are swapped)", async () => {
+    const opaque = (t: { accessToken: string; refreshToken: string }) => ({
+      ...t,
+      accessToken: authFixtures.tokens.accessToken,
+      refreshToken: authFixtures.tokens.refreshToken,
+    });
+    const repo = authRepo();
+    const user = repo.users[0];
+    if (user) user.passwordHash = await hashPassword(authBodyExamples.login.password);
+    const service = new AuthService(repo, cfg, fixedClock, resetDeps);
+
+    const login = await service.login(ctx, authBodyExamples.login, META);
+    expect({ ...login, tokens: opaque(login.tokens) }).toEqual(authExamples.authResult.data);
+
+    const tokens = await service.refresh(ctx, login.tokens.refreshToken);
+    expect({ tokens: opaque(tokens) }).toEqual(authExamples.tokens.data);
+
+    const fresh = new AuthService(
+      new FakeAuthRepository(() => FIXTURE_NOW),
+      cfg,
+      fixedClock,
+      resetDeps,
+    );
+    const registered = await fresh.register(ctx, authBodyExamples.register, META);
+    expect({
+      user: {
+        ...registered.user,
+        id: FIXTURE_IDS.user,
+        createdAt: authExamples.authResult.data.user.createdAt,
+      },
+      tokens: opaque(registered.tokens),
+    }).toEqual(authExamples.authResult.data);
   });
 
   it("users me and updated me", async () => {

@@ -89,6 +89,25 @@ describe("OpenAPI examples", () => {
     }
   });
 
+  it("400 examples only show what the operation can return", () => {
+    const err400 = (op: OperationDef) =>
+      (
+        opDoc(op).responses["400"]?.content?.["application/json"]?.example as {
+          error: { code: string; message: string };
+        }
+      ).error;
+    for (const op of operations) {
+      if (!opDoc(op).responses["400"]) continue;
+      const e = err400(op);
+      // Path params are plain strings (a malformed id is 404), so only a body or query can fail.
+      if (!op.body && !op.query) expect(e.code, label(op)).toBe("INVALID_CLIENT");
+      // With a token, the tenant comes from the token; only dedicated mode's header check can 400.
+      if (e.code === "INVALID_CLIENT" && op.auth === "required") {
+        expect(e.message, label(op)).toBe("Unknown client");
+      }
+    }
+  });
+
   it("is deterministic: building the document twice gives identical examples", () => {
     expect(JSON.stringify(buildOpenApiDocument())).toBe(JSON.stringify(doc));
   });

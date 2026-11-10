@@ -11,6 +11,7 @@ export const errorExamples = {
     { path: "email", message: "Invalid email address" },
   ]),
   invalidClient: exampleError("INVALID_CLIENT", "A valid X-Client-Id header is required"),
+  unknownClient: exampleError("INVALID_CLIENT", "Unknown client"),
   unauthenticated: exampleError("UNAUTHENTICATED", "UNAUTHENTICATED"),
   invalidCredentials: exampleError("INVALID_CREDENTIALS", "INVALID_CREDENTIALS"),
   invalidRefreshToken: exampleError("INVALID_REFRESH_TOKEN", "INVALID_REFRESH_TOKEN"),
