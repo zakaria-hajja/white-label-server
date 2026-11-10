@@ -104,8 +104,9 @@ Login and register return `tokens: {accessToken, refreshToken, tokenType: "Beare
 6. On 429 `RATE_LIMITED`: read the `Retry-After` header (seconds), wait at least that long, and do not
    auto-retry in a tight loop. Back off on 5xx as well.
 7. Branch on `error.code`; show your own localised text rather than `error.message`.
-8. Use `GET /app/config` at start-up for display name, support and legal links, password-reset link base
-   URL, language and theme defaults, branding, feature flags and version hints. Mind the caching below.
+8. Use `GET /app/config` at start-up for display name, support and legal links, language and theme
+   defaults, branding, feature flags and version hints. Mind the caching below. (The password-reset link
+   base URL is server-side only: it is used to build the emailed link and is not in the response.)
 9. Never treat `/health` as a JSON success check; see below.
 
 ## Health

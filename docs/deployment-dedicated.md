@@ -71,5 +71,7 @@ backward compatible because Android apps pin the OpenAPI contract by tag ([api.m
   What it deletes: [deployment-shared.md](./deployment-shared.md#pruning-auth-data-npm-run-dbprune).
 - Suspension: `npm run tenant -- set-status --slug acme --status SUSPENDED` takes effect within 30 s (403
   `TENANT_SUSPENDED`).
+- The console mailer logs live reset links whenever `NODE_ENV` is not `production` (staging included);
+  set `NODE_ENV=production` on any deployment with real users.
 - Before adding a real mail provider (async sending, console mailer suppresses links in production):
   [deployment-shared.md](./deployment-shared.md#before-adding-a-real-mail-provider).

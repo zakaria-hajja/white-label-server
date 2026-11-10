@@ -170,7 +170,9 @@ npm run db:prune   # {"deleted": {"refreshTokens": 120, "sessions": 8, "password
 
 Forgot-password currently uses the console mailer: it only logs, and in production it **suppresses the
 link** (`reset email suppressed: no mail provider`), so password reset does not work end to end in
-production until a provider is added. When you implement `Mailer` (`src/modules/mail/mailer.ts`):
+production until a provider is added. With any other `NODE_ENV` (staging, `test`, unset) it **logs the
+live reset link**, which lets anyone who can read the logs reset that account: set `NODE_ENV=production`
+on every environment with real users, or restrict access to its logs. When you implement `Mailer` (`src/modules/mail/mailer.ts`):
 
 - Send the mail **asynchronously** (queue or fire-and-forget with error logging). Today an existing account
   costs extra database writes and a mail call that an unknown email does not; a synchronous provider call
