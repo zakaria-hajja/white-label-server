@@ -44,15 +44,15 @@ These guard the properties the product depends on; keep them green and extend th
 
 | File (under `tests/integration/security`) | Guards |
 | --- | --- |
-| `isolation.test.ts` | Tenant isolation matrix: two tenants with colliding emails and data, and every endpoint (including by-id lookups and session revocation) stays inside the caller's tenant |
+| `isolation.test.ts` | Tenant isolation matrix: two tenants with colliding emails and data, and every endpoint (including by-id lookups and session revocation) stays inside the caller's tenant; a completeness test fails if a tenant-required route has no row |
 | `leakage.test.ts` | Success and error responses of every endpoint expose no `passwordHash`, `tenantId`, token hashes, IPs or lockout fields; errors are never publicly cacheable; a forced 500 and a degraded health check do not echo internals |
 | `auth-guard.test.ts` | Protected routes reject missing or garbage credentials, revoked or expired sessions, disabled users, an `X-Client-Id` for another tenant, a foreign `sid` and an unknown tenant; `lastUsedAt` throttling; rate limits skip IP rules without a trusted proxy and return 429 with `Retry-After` with one |
 | `tokens.test.ts` | Access-token expiry (`TOKEN_EXPIRED`), random refresh tokens, wrong-secret and `alg: none` tokens |
 | `suspension.test.ts` | A suspended tenant gets 403 `TENANT_SUSPENDED` at every entry point without affecting others, and recovers when reactivated |
 | `security.dedicated.test.ts` | Dedicated mode rejects other tenants' tokens (401) and a mismatched `X-Client-Id` (400) |
 
-Refresh rotation, the 10 s reuse grace and theft detection are covered by `tests/unit/modules/auth/refresh.test.ts` and `tests/integration/auth/sessions.test.ts`. Related suites: `tenant/resolution*.test.ts` (the resolver table in [architecture.md](./architecture.md)),
-`database/schema.test.ts` (composite foreign keys and tenant-scoped uniqueness), and the OpenAPI contract
+Refresh rotation, the 10 s reuse grace (lost-response retries, superseded tokens, a randomised invariant test) and theft detection are covered by `tests/unit/modules/auth/refresh.test.ts` and `tests/integration/auth/sessions.test.ts`; the login/password-reset race by `tests/unit/modules/auth/login.test.ts` and `tests/integration/auth/password-reset.test.ts`. Related suites: `tenant/resolution*.test.ts` (the resolver table in [architecture.md](./architecture.md)),
+`database/schema.test.ts` (composite foreign keys and tenant-scoped uniqueness), `database/prune.test.ts` (`npm run db:prune` keeps live rows, removes dead ones), and the OpenAPI contract
 tests below.
 
 ## Contract tests
