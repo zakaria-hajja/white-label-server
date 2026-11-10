@@ -46,7 +46,8 @@ Tags are `vMAJOR.MINOR.PATCH`:
 
 The owner cuts tags on `main`, each with a GitHub release whose notes list the contract additions and
 any migration steps. Android pins a tag for its vendored `api/openapi.json`; each app's backend merges
-tags.
+tags. App backends fetch the starter's tags as `starter/v*`
+([creating-a-backend.md](./creating-a-backend.md#1-create-the-repo)), so their own `v*` tags are free.
 
 ## v1 additions
 
