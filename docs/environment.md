@@ -16,9 +16,10 @@ invalid.
 | `ACCESS_TOKEN_TTL_SECONDS` | never | `900` | integer 60 to 3600 | |
 | `REFRESH_SESSION_TTL_DAYS` | never | `30` | integer 1 to 365 | |
 | `PASSWORD_RESET_TTL_MINUTES` | never | `30` | integer 5 to 1440 | |
-| `TRUST_PROXY` | never | `false` | `true`, `false` | If `true`, client IP is taken from the first `X-Forwarded-For` hop (falling back to `X-Real-IP`). Enable only behind a trusted proxy; otherwise IP-based rate limits are skipped. |
+| `TRUST_PROXY` | never | `false` | `true`, `false` | If `true`, client IP is taken from `X-Forwarded-For`, counting `TRUST_PROXY_HOPS` entries from the right (`X-Real-IP` is used only when `X-Forwarded-For` is absent). Enable only behind a proxy you control; otherwise the IP is unknown and IP-based rate limits are skipped. |
+| `TRUST_PROXY_HOPS` | never | `1` | integer 1 to 20 | Only used when `TRUST_PROXY=true`. Number of proxies you control in front of the app (each appends one `X-Forwarded-For` entry). Entries left of that are client-supplied and ignored, so they cannot spoof the IP. Too few entries, or a non-IP entry, gives an unknown IP. See [deployment-shared.md](./deployment-shared.md#behind-a-proxy-trust_proxytrue). |
 | `LOG_LEVEL` | never | `info` | non-empty string (pino level) | |
-| `MAILER` | never | `console` | `console` | `console` logs reset links only when `NODE_ENV` is not `production`. |
+| `MAILER` | never | `console` | `console` | `console` logs reset links (live, usable tokens) whenever `NODE_ENV` is not exactly `production`, including staging or any other value; with `production` it logs only that the mail was suppressed. Treat non-production logs as secret, or set `NODE_ENV=production` on any environment with real accounts. |
 | `MAX_BODY_BYTES` | never | `65536` | integer 1 to 10485760 (10 MiB) | Maximum request body size; values above 10 MiB are rejected at startup. |
 | `NODE_ENV` | never | `development` | non-empty string | Set to `production` in production. |
 

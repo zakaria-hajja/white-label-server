@@ -59,7 +59,9 @@ describe("dedicated deployment security", () => {
       { sub: user.id, tid: other.id, sid: session.id },
       new Date(),
     );
-    expect((await me(token)).status).toBe(401);
+    const res = await me(token);
+    expect(res.status).toBe(401);
+    expect((await envelope(res)).error?.code).toBe("UNAUTHENTICATED");
   });
 
   it("another tenant's slug in X-Client-Id -> 400 INVALID_CLIENT", async () => {

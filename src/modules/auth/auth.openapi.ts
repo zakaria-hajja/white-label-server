@@ -83,7 +83,7 @@ registerOperation({
   operationId: "authRefresh",
   summary: "Exchange a refresh token for a new token pair",
   description:
-    "Refresh tokens are single-use. Reusing a spent token (after a short grace window) revokes the session.",
+    "Refresh tokens are single-use. If a response is lost, retrying once with the old token within 10 s returns a fresh pair and supersedes the lost one (a superseded token gets 401 without revoking the session). Reusing a spent token after 10 s revokes the session.",
   auth: "none",
   body: refreshBody,
   rateLimit: refreshRateLimit,

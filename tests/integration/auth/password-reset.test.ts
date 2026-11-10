@@ -175,3 +175,41 @@ describe("reset-password", () => {
     expect((await attempt()).status).toBe(429);
   });
 });
+
+describe("login racing a password reset", () => {
+  it("a login that verified the old password while a reset was committing leaves no live session", async () => {
+    await signup();
+    const prisma = testPrisma();
+    const user = await prisma.user.findFirstOrThrow({ where: { email: "a@x.co" } });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const holding = new Promise<void>((r) => (locked = r));
+    // The reset transaction: changes the password and revokes sessions, then commits late.
+    const resetTx = prisma.$transaction(
+      async (tx) => {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { passwordHash: "reset-hash", passwordChangedAt: new Date() },
+        });
+        await tx.session.updateMany({
+          where: { userId: user.id, revokedAt: null },
+          data: { revokedAt: new Date(), revokedReason: "password_reset" },
+        });
+        locked();
+        await gate;
+      },
+      { timeout: 10_000 },
+    );
+    await holding;
+    // Reads the committed (old) hash, so the old password verifies; then it must wait for the reset.
+    const loginRes = doLogin(OLD);
+    await new Promise((r) => setTimeout(r, 500));
+    release();
+    await resetTx;
+    const res = await loginRes;
+    expect(res.status).toBe(401);
+    expect((await envelope(res)).error?.code).toBe("INVALID_CREDENTIALS");
+    expect(await prisma.session.count({ where: { userId: user.id, revokedAt: null } })).toBe(0);
+  });
+});

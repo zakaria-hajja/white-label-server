@@ -41,6 +41,34 @@ beforeEach(async () => {
 });
 
 describe("AuthService.login", () => {
+  it("rejects a login whose password was reset between verification and session creation", async () => {
+    const sessionsBefore = repo.sessions.length;
+    const tx = repo.transaction.bind(repo);
+    // A password reset commits after the login verified the old password but before its session.
+    repo.transaction = async (fn) => {
+      const u = repo.users[0]!;
+      now = new Date(now.getTime() + 1);
+      await repo.updatePassword(u.tenantId, u.id, "new-hash", now);
+      await repo.revokeAllSessions(u.tenantId, u.id, "password_reset", now);
+      return tx(fn);
+    };
+    await expect(
+      service.login(TENANT, { email: "a@b.co", password: GOOD }, META),
+    ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+    expect(repo.sessions.length).toBe(sessionsBefore);
+  });
+
+  it("rejects a login when the user was disabled before the session is created", async () => {
+    const tx = repo.transaction.bind(repo);
+    repo.transaction = async (fn) => {
+      repo.users[0]!.status = "DISABLED";
+      return tx(fn);
+    };
+    await expect(
+      service.login(TENANT, { email: "a@b.co", password: GOOD }, META),
+    ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+  });
+
   it("returns user and tokens for correct credentials", async () => {
     const r = await service.login(TENANT, { email: "a@b.co", password: GOOD }, META);
     expect(r.user.email).toBe("a@b.co");

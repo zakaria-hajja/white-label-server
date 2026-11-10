@@ -71,19 +71,19 @@ Login and register return `tokens: {accessToken, refreshToken, tokenType: "Beare
 - **Revocation is immediate:** logout, password change (other sessions), password reset, disabling the user
   or `DELETE /auth/sessions/{id}` make the next request with that session's access token fail with 401
   `UNAUTHENTICATED`, even before the token's `exp`.
-- **Reuse detection:** presenting an already-used refresh token returns 401 `INVALID_REFRESH_TOKEN`. If it
-  was used less than 10 s ago this is treated as a benign retry or race and the session survives (the client
-  that got the new pair keeps working). After 10 s it is treated as theft and the whole session is revoked.
-  Therefore the Android client must **single-flight refresh**: only one refresh in flight at a time, with
-  every concurrent 401 waiting on that one result.
-- **Lost refresh responses.** The server stores only token hashes, so it cannot resend a pair it already
-  issued. If a refresh succeeded on the server but the response never reached the app (timeout, dropped
-  connection, process death), retrying with the old token within 10 s returns 401 `INVALID_REFRESH_TOKEN`
-  while the session survives, and the app no longer holds a usable token. Retrying after 10 s revokes the
-  whole session. The accepted cost: the user signs in again. Clients should therefore (a) persist the new
-  pair atomically before using it, (b) never retry a refresh with a token already known to be accepted,
-  (c) after an ambiguous failure make at most one retry with the old token and, if that returns
-  `INVALID_REFRESH_TOKEN`, send the user to sign in, and (d) never retry with the old token after 10 s.
+- **Reuse detection:** presenting an already-used refresh token more than 10 s after it was used is treated
+  as theft: 401 `INVALID_REFRESH_TOKEN` and the whole session is revoked. Within 10 s it is treated as a retry
+  (see below) and the session survives. Therefore the Android client must **single-flight refresh**: only
+  one refresh in flight at a time, with every concurrent 401 waiting on that one result.
+- **Lost refresh responses.** If a refresh succeeded on the server but the response never reached the app
+  (timeout, dropped connection, process death), retry once with the **old** token within 10 s: the server
+  supersedes the pair it issued (which the app never saw) and returns a **fresh pair**. Only the last pair
+  handed out works; a superseded refresh token gets 401 `INVALID_REFRESH_TOKEN` without revoking the session.
+  A retry within 10 s gets 401 (session kept) if the new token from the first response was already used.
+  Clients should therefore (a) persist the new pair atomically before using it, (b) never retry a refresh
+  with a token already known to be accepted, (c) after an ambiguous failure make at most one retry with the
+  old token, within 10 s, and if that returns `INVALID_REFRESH_TOKEN` send the user to sign in, and (d)
+  never retry with the old token after 10 s (that revokes the session).
 - Password reset links are valid `PASSWORD_RESET_TTL_MINUTES` (default 30), single use, and revoke all
   sessions.
 - Repeated failed logins lock the account for 15 minutes after 10 failures; the response stays
@@ -98,13 +98,15 @@ Login and register return `tokens: {accessToken, refreshToken, tokenType: "Beare
    still fails with 401, sign out.
 4. On 401 `UNAUTHENTICATED` for a request that had a token: the session was revoked or the user disabled;
    try one refresh, and if that fails, sign out.
-5. On 401 `INVALID_REFRESH_TOKEN`: sign out and show the login screen. Do not retry. (This includes the
-   lost-response case described under Token lifecycle: the user must sign in again.)
+5. On 401 `INVALID_REFRESH_TOKEN`: sign out and show the login screen. Do not retry. (The one exception
+   is before that: when a refresh fails ambiguously, e.g. a timeout, retry it once with the old token
+   within 10 s; that returns a fresh pair. Still single-flight: the retry is the one refresh in flight.)
 6. On 429 `RATE_LIMITED`: read the `Retry-After` header (seconds), wait at least that long, and do not
    auto-retry in a tight loop. Back off on 5xx as well.
 7. Branch on `error.code`; show your own localised text rather than `error.message`.
-8. Use `GET /app/config` at start-up for display name, support and legal links, password-reset link base
-   URL, language and theme defaults, branding, feature flags and version hints. Mind the caching below.
+8. Use `GET /app/config` at start-up for display name, support and legal links, language and theme
+   defaults, branding, feature flags and version hints. Mind the caching below. (The password-reset link
+   base URL is server-side only: it is used to build the emailed link and is not in the response.)
 9. Never treat `/health` as a JSON success check; see below.
 
 ## Health

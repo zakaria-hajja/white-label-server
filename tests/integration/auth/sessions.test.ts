@@ -69,7 +69,11 @@ describe("refresh / logout", () => {
     expect(next.refreshToken).not.toBe(t.refreshToken);
     expect((await getMe(t)).status).toBe(200);
     expect((await getMe(next)).status).toBe(200);
-    expect((await doRefresh(t.refreshToken)).status).toBe(401);
+    // Once the new token has been used, the old one no longer rotates (even within the grace window).
+    expect((await doRefresh(next.refreshToken)).status).toBe(200);
+    const again = await doRefresh(t.refreshToken);
+    expect(again.status).toBe(401);
+    expect((await envelope(again)).error?.code).toBe("INVALID_REFRESH_TOKEN");
   });
 
   it("logout revokes the session: access tokens 401 and refresh 401; unknown token still 200", async () => {
@@ -108,13 +112,51 @@ describe("refresh / logout", () => {
     );
   });
 
-  it("two simultaneous refreshes: one 200, one 401, session still usable", async () => {
+  it("two simultaneous refreshes: afterwards exactly one returned token works, session kept", async () => {
+    for (let i = 0; i < 5; i++) {
+      const email = `race${i}@x.co`;
+      const t = await signup(email);
+      const results = await Promise.all([doRefresh(t.refreshToken), doRefresh(t.refreshToken)]);
+      for (const r of results) expect([200, 401]).toContain(r.status);
+      const returned: Tokens[] = [];
+      for (const r of results) {
+        if (r.status === 200) returned.push((await envelope(r)).data?.tokens as Tokens);
+        else expect((await envelope(r)).error?.code).toBe("INVALID_REFRESH_TOKEN");
+      }
+      expect(returned.length).toBeGreaterThanOrEqual(1);
+      // Wait out the grace window so a second use of a used token cannot count as a retry.
+      now = new Date(now.getTime() + 11_000);
+      const statuses = [];
+      for (const p of returned) statuses.push((await doRefresh(p.refreshToken)).status);
+      expect(statuses.filter((s) => s === 200)).toHaveLength(1);
+      const session = await testPrisma().session.findFirstOrThrow({ where: { user: { email } } });
+      expect(session.revokedAt).toBeNull();
+      const live = await testPrisma().refreshToken.count({
+        where: { sessionId: session.id, usedAt: null, supersededAt: null },
+      });
+      expect(live).toBe(1);
+    }
+  });
+
+  it("lost refresh response: a retry with the old token within 10 s returns a fresh pair", async () => {
     const t = await signup("a@x.co");
-    const [r1, r2] = await Promise.all([doRefresh(t.refreshToken), doRefresh(t.refreshToken)]);
-    expect([r1.status, r2.status].sort()).toEqual([200, 401]);
-    const winner = (await envelope(r1.status === 200 ? r1 : r2)).data?.tokens as Tokens;
-    expect((await getMe(t)).status).toBe(200);
-    expect((await doRefresh(winner.refreshToken)).status).toBe(200);
+    const lostRes = await doRefresh(t.refreshToken);
+    expect(lostRes.status).toBe(200);
+    const lost = (await envelope(lostRes)).data?.tokens as Tokens; // never reaches the client
+    now = new Date(now.getTime() + 3_000);
+    const retryRes = await doRefresh(t.refreshToken);
+    expect(retryRes.status).toBe(200);
+    const retry = (await envelope(retryRes)).data?.tokens as Tokens;
+    expect(retry.refreshToken).not.toBe(lost.refreshToken);
+    // The lost successor is superseded: 401, and it does not revoke the session.
+    const lostUse = await doRefresh(lost.refreshToken);
+    expect(lostUse.status).toBe(401);
+    expect((await envelope(lostUse)).error?.code).toBe("INVALID_REFRESH_TOKEN");
+    expect((await testPrisma().session.findFirstOrThrow()).revokedAt).toBeNull();
+    expect((await getMe(retry)).status).toBe(200);
+    expect((await doRefresh(retry.refreshToken)).status).toBe(200);
+    const rows = await testPrisma().refreshToken.findMany({ orderBy: { createdAt: "asc" } });
+    expect(rows.filter((r) => r.usedAt === null && r.supersededAt === null)).toHaveLength(1);
   });
 });
 

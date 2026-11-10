@@ -147,6 +147,7 @@ describe("response leakage", () => {
         }),
         noParams,
       ),
+      200,
     );
     await rec(
       await logout(req("POST", "auth/logout", { body: { refreshToken: "whatever" } }), noParams),
@@ -157,6 +158,7 @@ describe("response leakage", () => {
         req("DELETE", `auth/sessions/${alice.sessionId}`, { token: t }),
         idParams(alice.sessionId),
       ),
+      200,
     );
     expect(seen).toBeGreaterThanOrEqual(18);
   });
@@ -210,6 +212,7 @@ describe("response leakage", () => {
         }),
         noParams,
       ),
+      400,
     );
     await rec(await authMe(req("GET", "auth/me"), noParams), 401);
     await rec(await authMe(req("GET", "auth/me", { token: "garbage" }), noParams), 401);
@@ -234,6 +237,7 @@ describe("response leakage", () => {
         }),
         noParams,
       ),
+      401,
     );
     await rec(
       await patchSettings(

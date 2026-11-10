@@ -13,6 +13,8 @@ import type {
 
 type Ctx<B> = RouteContext<B, undefined, undefined, "required", "none">;
 
+// Rule order matters: route() stops at the first rejected rule, so IP rules come first. A blocked
+// IP then never reaches (and never creates) the body-keyed account buckets.
 export const registerRateLimit: RateLimitRule[] = [
   { name: "register-ip", limit: 5, windowSeconds: 3600, key: ({ ip }) => ipKey(ip) },
 ];
@@ -34,6 +36,7 @@ export const refreshRateLimit: RateLimitRule[] = [
 ];
 
 export const forgotPasswordRateLimit: RateLimitRule[] = [
+  { name: "forgot-ip", limit: 10, windowSeconds: 900, key: ({ ip }) => ipKey(ip) },
   // Not IP-scoped, so a distributed flood cannot spam one mailbox. body.email is already normalised.
   {
     name: "forgot-account",
@@ -42,7 +45,6 @@ export const forgotPasswordRateLimit: RateLimitRule[] = [
     key: ({ body, tenant }) =>
       tenant ? `${tenant.tenantId}|${(body as ForgotPasswordInput).email}` : null,
   },
-  { name: "forgot-ip", limit: 10, windowSeconds: 900, key: ({ ip }) => ipKey(ip) },
 ];
 
 export const resetPasswordRateLimit: RateLimitRule[] = [

@@ -83,6 +83,9 @@ export class AuthService {
       await dummyVerify(input.password);
       throw new AppError("INVALID_CREDENTIALS");
     }
+    // Snapshot what was verified: a reset committing after this point must not leave a session.
+    const verifiedHash = user.passwordHash;
+    const verifiedChangedAt = user.passwordChangedAt.getTime();
     if (!(await verifyPassword(user.passwordHash, input.password))) {
       // An expired lock starts a fresh count (the guards above ruled out an active lock).
       if (user.lockedUntil !== null) await this.repo.resetFailedLogins(ctx.tenantId, user.id);
@@ -97,9 +100,20 @@ export class AuthService {
     if (user.failedLoginCount > 0 || user.lockedUntil !== null) {
       await this.repo.resetFailedLogins(ctx.tenantId, user.id);
     }
-    const { session, refreshToken } = await this.repo.transaction((repo) =>
-      this.createSession(repo, ctx.tenantId, user.id, meta, now),
-    );
+    const { session, refreshToken } = await this.repo.transaction(async (repo) => {
+      // Lock the user row: a password reset racing this login either committed already (we see the
+      // new hash and abort) or waits for us and then revokes the session we create.
+      const current = await repo.lockUserCredentials(ctx.tenantId, user.id);
+      if (
+        !current ||
+        current.status !== "ACTIVE" ||
+        current.passwordHash !== verifiedHash ||
+        current.passwordChangedAt.getTime() !== verifiedChangedAt
+      ) {
+        throw new AppError("INVALID_CREDENTIALS");
+      }
+      return this.createSession(repo, ctx.tenantId, user.id, meta, now);
+    });
     return {
       user: toUserDto(user),
       tokens: await this.tokens(user.id, ctx, session, refreshToken, now),
@@ -122,22 +136,50 @@ export class AuthService {
     if (!user || user.status !== "ACTIVE") throw invalid();
 
     const next = generateOpaqueToken();
-    const claimed = await this.repo.transaction(async (repo) => {
-      if (!(await repo.claimRefreshToken(token.id, now))) return false;
+    const issue = async (repo: AuthRepository, replacedId: string) => {
       // The session's absolute lifetime is not extended.
-      await repo.createRefreshToken(session.id, hashToken(next), session.expiresAt);
+      const nextId = await repo.createRefreshToken(session.id, hashToken(next), session.expiresAt);
+      await repo.setRefreshTokenReplacement(replacedId, nextId);
       await repo.touchSession(ctx.tenantId, session.id, now);
-      return true;
-    });
-    if (!claimed) {
-      const current = await this.repo.findRefreshTokenByHash(tokenHash);
-      const usedAt = current?.token.usedAt ?? null;
-      // Within the grace window this is a benign retry or race: reject, keep the session.
-      if (usedAt === null || now.getTime() - usedAt.getTime() >= REUSE_GRACE_MS) {
-        await this.repo.revokeSession(ctx.tenantId, session.id, "refresh_token_reuse", now);
-      }
+    };
+
+    // (a) Normal rotation: claim the token and issue its successor in one transaction.
+    let current = token;
+    if (token.usedAt === null && token.supersededAt === null) {
+      const claimed = await this.repo.transaction(async (repo) => {
+        if (!(await repo.claimRefreshToken(token.id, now))) return false;
+        await issue(repo, token.id);
+        return true;
+      });
+      if (claimed) return this.tokens(user.id, ctx, session, next, now);
+      // Lost a race: decide from the token's committed state.
+      const reread = await this.repo.findRefreshTokenByHash(tokenHash);
+      if (!reread) throw invalid();
+      current = reread.token;
+    }
+
+    // (e) A superseded token was issued but replaced by a lost-response retry. Not evidence of
+    // theft: reject, keep the session.
+    if (current.supersededAt !== null || current.usedAt === null) throw invalid();
+
+    // (d) Reuse after the grace window: treat as theft and revoke the session.
+    if (now.getTime() - current.usedAt.getTime() >= REUSE_GRACE_MS) {
+      await this.repo.revokeSession(ctx.tenantId, session.id, "refresh_token_reuse", now);
       throw invalid();
     }
+
+    // (b) Retry within grace (the client lost the response): if the successor was never used,
+    // supersede it and hand out a fresh pair, so the session keeps exactly one live token.
+    const successorId = current.replacedById;
+    const reissued =
+      successorId !== null &&
+      (await this.repo.transaction(async (repo) => {
+        if (!(await repo.supersedeRefreshToken(successorId, now))) return false;
+        await issue(repo, current.id);
+        return true;
+      }));
+    // (c) The successor was already used or superseded (or we lost that race): reject, keep the session.
+    if (!reissued) throw invalid();
     return this.tokens(user.id, ctx, session, next, now);
   }
 

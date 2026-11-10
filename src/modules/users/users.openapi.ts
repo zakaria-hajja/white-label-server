@@ -34,7 +34,7 @@ registerOperation({
   operationId: "usersChangePassword",
   summary: "Change the current user's password",
   description:
-    "A wrong current password is INVALID_CREDENTIALS (401). On success every session of the user is revoked; sign in again.",
+    "A wrong current password is INVALID_CREDENTIALS (401). On success every other session of the user is revoked; the caller's session and tokens stay valid.",
   body: changePasswordBody,
   rateLimit: changePasswordRateLimit,
   success: [{ status: 200, description: "Password changed", schema: EmptyEnvelope }],

@@ -230,7 +230,7 @@
                 }
               }
             },
-            "description": "Too many requests. Possible codes: RATE_LIMITED. Limits (per instance): forgot-account: 3 per 900s; forgot-ip: 10 per 900s.",
+            "description": "Too many requests. Possible codes: RATE_LIMITED. Limits (per instance): forgot-ip: 10 per 900s; forgot-account: 3 per 900s.",
             "headers": {
               "Retry-After": {
                 "$ref": "#/components/headers/RetryAfter"
@@ -634,7 +634,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "description": "Refresh tokens are single-use. Reusing a spent token (after a short grace window) revokes the session.",
+        "description": "Refresh tokens are single-use. If a response is lost, retrying once with the old token within 10 s returns a fresh pair and supersedes the lost one (a superseded token gets 401 without revoking the session). Reusing a spent token after 10 s revokes the session.",
         "operationId": "authRefresh",
         "parameters": [
           {
@@ -2164,7 +2164,7 @@
     },
     "/api/v1/users/me/password": {
       "patch": {
-        "description": "A wrong current password is INVALID_CREDENTIALS (401). On success every session of the user is revoked; sign in again.",
+        "description": "A wrong current password is INVALID_CREDENTIALS (401). On success every other session of the user is revoked; the caller's session and tokens stay valid.",
         "operationId": "usersChangePassword",
         "parameters": [
           {

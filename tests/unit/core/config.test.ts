@@ -34,6 +34,15 @@ describe("loadConfig", () => {
     expect(loadConfig({ ...base, TRUST_PROXY: "true" }).trustProxy).toBe(true);
   });
 
+  it("defaults TRUST_PROXY_HOPS to 1 and parses it", () => {
+    expect(loadConfig(base).trustProxyHops).toBe(1);
+    expect(loadConfig({ ...base, TRUST_PROXY_HOPS: "2" }).trustProxyHops).toBe(2);
+  });
+
+  it.each(["0", "-1", "1.5", "abc"])("rejects TRUST_PROXY_HOPS=%s", (v) => {
+    expect(() => loadConfig({ ...base, TRUST_PROXY_HOPS: v })).toThrow(/TRUST_PROXY_HOPS/);
+  });
+
   it("rejects missing DEPLOYMENT_MODE", () => {
     expect(() => loadConfig({ ...base, DEPLOYMENT_MODE: undefined })).toThrow(ConfigError);
   });

@@ -135,6 +135,8 @@ erDiagram
         string tokenHash UK
         datetime expiresAt
         datetime usedAt "nullable"
+        uuid replacedById FK "nullable, self"
+        datetime supersededAt "nullable"
     }
     PasswordResetToken {
         uuid id PK
@@ -175,7 +177,8 @@ erDiagram
 ```
 
 A `Session` is the revocable unit (one per login); each refresh rotation adds a `RefreshToken` row to the
-same session and marks the previous one used. Ids are UUIDv7. `RefreshToken` has no tenant column: it is
+same session, marks the previous one used and links it to its successor (`replacedById`); a
+lost-response retry marks the unused successor `supersededAt` instead. Ids are UUIDv7. `RefreshToken` has no tenant column: it is
 reached only through its session, which is tenant-scoped.
 
 ## Tenant resolution
@@ -274,7 +277,7 @@ sequenceDiagram
     R->>S: login(ctx, input)
     S->>DB: User where tenantId AND email
     S->>S: argon2id verify (dummy verify if no user, locked or disabled)
-    S->>DB: create Session + RefreshToken(hash)
+    S->>DB: tx: lock User row, re-check hash, create Session + RefreshToken(hash)
     S-->>A: {user, tokens{accessToken(sub,tid,sid), refreshToken, expiresIn}}
     A->>R: GET /users/me  Authorization: Bearer ...
     R->>R: verify JWT signature/iss/aud/exp
@@ -294,13 +297,24 @@ after the access token expires. `lastUsedAt` is refreshed at most every 5 minute
 
 1. Look up by hash. Unknown, another tenant's, expired, or belonging to a revoked or expired session or
    a non-active user: `401 INVALID_REFRESH_TOKEN`. A token from another tenant never revokes anything.
-2. In one transaction, atomically claim the token (`usedAt` set only if still null), create the next
-   token (same session expiry) and touch the session. The new pair is returned.
-3. If the claim is lost (token already used): when it was used less than 10 s ago this is treated as
-   a benign retry or race: reject with `401`, keep the session. After the 10 s grace window it is
-   treated as theft: the session is revoked with reason `refresh_token_reuse` and `401` is returned.
+2. A superseded token (`supersededAt` set, see 4) is rejected with `401`; the session is kept (it was
+   issued but replaced, which is not evidence of theft).
+3. Unused token: in one transaction, atomically claim it (`usedAt` set only if it is still unused and
+   unsuperseded), create the successor S (same session expiry), set `replacedById = S` and touch the
+   session. S's pair is returned. A lost claim falls through to 4/5 using the token's committed state.
+4. Used less than 10 s ago (a lost-response retry or a race): if the successor S is still unused and
+   unsuperseded, atomically supersede it (`updateMany ... usedAt IS NULL AND supersededAt IS NULL`, count
+   1), create S2, point `replacedById` at S2 and return S2's pair. If S was already used or the supersede
+   loses a race, reject with `401` and keep the session.
+5. Used 10 s ago or more: treated as theft; the session is revoked with reason `refresh_token_reuse` and
+   `401` is returned.
 
-Clients must serialize refreshes (single flight).
+Invariant: a session has at most one live (unused, unsuperseded) refresh token, and it belongs to the
+last pair handed out; a replay within the grace window never revokes the session. Two simultaneous
+refreshes with one token may both return 200, but only the later pair works. Clients must still
+serialize refreshes (single flight). Trade-off: someone holding a stolen token who uses it within 10 s
+of the legitimate refresh, before the new token is used, gets the live pair and the legitimate client's
+pair is superseded (it gets `401` without revocation and the user signs in again).
 
 **Lockout and enumeration protections**
 
@@ -308,6 +322,11 @@ Clients must serialize refreshes (single flight).
   instances). A locked, disabled or unknown account returns the same `401 INVALID_CREDENTIALS` as a
   wrong password, and each of those paths spends one Argon2 verification (a dummy one when no hash is
   available) to equalize timing. A successful login clears the counter.
+- A login racing a password reset cannot leave a session that survives the reset: the transaction that
+  creates the session locks the user row (`SELECT ... FOR UPDATE`) and aborts with `401
+  INVALID_CREDENTIALS` if the password hash or `passwordChangedAt` changed since the password was
+  verified (or the user is no longer `ACTIVE`). A reset that is still committing makes the login wait
+  and then fail.
 - Forgot-password always answers `202 {}` and swallows mail errors.
 - Reset tokens: 32 random bytes, SHA-256 stored, 30 min expiry, single use, looked up per tenant. A
   reset updates the password, revokes all sessions and clears the lockout. Requesting a new token
@@ -317,6 +336,9 @@ Clients must serialize refreshes (single flight).
 
 **Rate limits** (in `auth.handlers.ts` and `users.handlers.ts`, evaluated by `route()` after input parsing; `429
 RATE_LIMITED` with `Retry-After`). IP rules use `ipKey`, which skips the rule when the IP is unknown.
+Rules run in list order and the first rejection stops evaluation, so every list puts its IP rules first:
+a blocked IP never creates body-keyed (email) buckets. The in-memory limiter holds at most 100,000 keys
+(`maxEntries`); at the cap it drops expired keys, then the oldest ones.
 
 | Rule name                 | Route                      | Limit / window | Key                 |
 | ------------------------- | -------------------------- | -------------- | ------------------- |
@@ -324,8 +346,8 @@ RATE_LIMITED` with `Retry-After`). IP rules use `ipKey`, which skips the rule wh
 | `login-ip`                | POST /auth/login           | 10 / 60 s      | IP                  |
 | `login-account`           | POST /auth/login           | 5 / 60 s       | tenant id + email   |
 | `refresh-ip`              | POST /auth/refresh         | 30 / 60 s      | IP                  |
-| `forgot-account`          | POST /auth/forgot-password | 3 / 15 min     | tenant id + email   |
 | `forgot-ip`               | POST /auth/forgot-password | 10 / 15 min    | IP                  |
+| `forgot-account`          | POST /auth/forgot-password | 3 / 15 min     | tenant id + email   |
 | `reset-ip`                | POST /auth/reset-password  | 10 / 15 min    | IP                  |
 | `change-password-account` | PATCH /users/me/password   | 5 / 15 min     | tenant id + user id |
 
@@ -337,12 +359,10 @@ no rate limit of their own.
 
 - `POST /auth/register` returns `409 EMAIL_ALREADY_REGISTERED`, a known account-enumeration vector
   (a mobile UX trade-off); it is rate limited per IP.
-- IP-based limits only work with `TRUST_PROXY=true` behind a proxy that sets the client IP header;
-  otherwise the IP is unknown and those rules are skipped (a warning is logged in production).
+- IP-based limits only work with `TRUST_PROXY=true` behind a proxy; the client IP is the `TRUST_PROXY_HOPS`-th
+  `X-Forwarded-For` entry from the right (client-sent entries further left are ignored).
+  Without it the IP is unknown and those rules are skipped (a warning is logged in production).
   Account-keyed rules still apply.
-- A refresh whose response is lost cannot be recovered: tokens are stored hashed, so the server cannot resend
-  the new pair, and the retry with the old token gets `INVALID_REFRESH_TOKEN` (the user signs in again;
-  after the 10 s grace the session is revoked). Accepted trade-off; see [api.md](./api.md#token-lifecycle).
 - Rate limits are in memory and per instance: with N instances the effective limit is up to N times
   higher. Account lockout is in the database and is not affected.
 - Forgot-password has a timing difference (an existing account does database writes and a mail send).

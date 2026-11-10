@@ -35,11 +35,16 @@ export const AppConfigDocumentSchema = z.object({
   }),
   legal: z.object({ privacyPolicyUrl: httpUrl, termsUrl: httpUrl }),
   passwordReset: z.object({ linkBaseUrl }),
-  runtime: z.object({
-    defaultLanguage: z.string().min(2).max(10),
-    supportedLanguages: z.array(z.string()).min(1),
-    defaultTheme: z.enum(["SYSTEM", "LIGHT", "DARK"]),
-  }),
+  runtime: z
+    .object({
+      defaultLanguage: z.string().min(2).max(10),
+      supportedLanguages: z.array(z.string()).min(1),
+      defaultTheme: z.enum(["SYSTEM", "LIGHT", "DARK"]),
+    })
+    .refine((r) => r.supportedLanguages.includes(r.defaultLanguage), {
+      path: ["defaultLanguage"],
+      message: "must be one of supportedLanguages",
+    }),
   branding: z
     .object({
       primaryColor: z

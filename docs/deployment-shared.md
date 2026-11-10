@@ -70,10 +70,23 @@ return 403 `TENANT_SUSPENDED` within 30 s (the tenant cache TTL). Reactivate wit
 
 ## Behind a proxy: `TRUST_PROXY=true`
 
-Terminate TLS at a load balancer. Set `TRUST_PROXY=true` only if the proxy overwrites `X-Forwarded-For`
-(client-supplied values must not pass through): the first hop is used as the client IP. Without it the IP
-is "unknown", **all IP-based rate limits are skipped** (a warning is logged in production) and only the
-account-keyed limits apply. Also make the proxy or CDN key any cache of `/app/config` on `X-Client-Id`
+Terminate TLS at a load balancer and set `TRUST_PROXY=true`. Most proxies **append** the peer address to
+`X-Forwarded-For` instead of replacing it, so the leftmost entries are whatever the client sent. The app
+therefore reads the client IP from the right: set `TRUST_PROXY_HOPS` to the number of proxies **you
+control** between the internet and the app (default `1`); the entry that many places from the right is
+the client IP and everything to its left is ignored. If the header has fewer entries than that, or the
+entry is not an IP, the IP is "unknown". `X-Real-IP` is read only when `X-Forwarded-For` is absent.
+
+| Setup | `TRUST_PROXY_HOPS` |
+| --- | --- |
+| AWS ALB in front of the app (appends the client IP) | `1` |
+| GCP external HTTP(S) load balancer (appends `<client-ip>, <lb-ip>`) | `2` |
+| nginx with `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` | `1` per nginx you run |
+| CDN (e.g. CloudFront) -> ALB -> app | `2` (CDN + ALB) |
+
+The rule: hops = number of proxies you control that append to the header. Verify once by logging a
+request through the real chain. Without `TRUST_PROXY=true` the IP is "unknown", **all IP-based rate
+limits are skipped** (a warning is logged in production) and only the account-keyed limits apply. Also make the proxy or CDN key any cache of `/app/config` on `X-Client-Id`
 (the response sends `Vary: X-Client-Id`).
 
 ## Rate limits are per instance
@@ -130,11 +143,36 @@ Limits live in memory in each instance, so with N instances the effective limit 
   tables, so they use their own superuser-owned test databases, not these roles.
 - Back up the database; there is no application-level export.
 
+## Pruning auth data (`npm run db:prune`)
+
+Refresh tokens, sessions and password reset tokens are never deleted by the app, so the tables grow with
+every login and refresh. Run the prune job periodically (daily is plenty) against each database. It is
+built for production, idempotent, safe while the API serves traffic, and prints what it deleted:
+
+- refresh tokens of revoked or expired sessions, used refresh tokens older than 1 day + the 10 s reuse
+  window, and superseded refresh tokens older than 1 day;
+- sessions revoked or expired more than 7 days ago (with their tokens);
+- password reset tokens used or expired more than 1 day ago.
+
+A deleted token presented later is simply unknown (401, nothing revoked), so no outcome changes. It covers
+all tenants of the database. Like the tenant CLI it is **not in the images**: run it from a source checkout
+of the same release tag (a cron job on an admin machine, or a scheduled one-off job), with the app role
+(it needs only `DELETE`) and the same variables the CLI needs:
+
+```bash
+git checkout <release-tag> && npm ci
+export DEPLOYMENT_MODE=shared JWT_SECRET=<any 32+ char value> \
+  DATABASE_URL='postgresql://whitelabel_app:PASSWORD@HOST:5432/whitelabel?sslmode=require'
+npm run db:prune   # {"deleted": {"refreshTokens": 120, "sessions": 8, "passwordResetTokens": 3}}
+```
+
 ## Before adding a real mail provider
 
 Forgot-password currently uses the console mailer: it only logs, and in production it **suppresses the
 link** (`reset email suppressed: no mail provider`), so password reset does not work end to end in
-production until a provider is added. When you implement `Mailer` (`src/modules/mail/mailer.ts`):
+production until a provider is added. With any other `NODE_ENV` (staging, `test`, unset) it **logs the
+live reset link**, which lets anyone who can read the logs reset that account: set `NODE_ENV=production`
+on every environment with real users, or restrict access to its logs. When you implement `Mailer` (`src/modules/mail/mailer.ts`):
 
 - Send the mail **asynchronously** (queue or fire-and-forget with error logging). Today an existing account
   costs extra database writes and a mail call that an unknown email does not; a synchronous provider call

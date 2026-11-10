@@ -58,11 +58,20 @@ backward compatible because Android apps pin the OpenAPI contract by tag ([api.m
 
 ## Same as shared
 
-- `TRUST_PROXY=true` behind a proxy that overwrites `X-Forwarded-For`; without it IP rate limits are skipped.
+- `TRUST_PROXY=true` behind a proxy, with `TRUST_PROXY_HOPS` = the number of proxies you control that append
+  to `X-Forwarded-For` (AWS ALB: 1; GCP external LB: 2; nginx with `$proxy_add_x_forwarded_for`: 1 per
+  nginx; CDN + LB: 2). The client IP is read that many entries from the right, so client-sent entries are
+  ignored ([details](./deployment-shared.md#behind-a-proxy-trust_proxytrue)). Without it IP rate limits are
+  skipped.
 - Rate limits are per instance; swap in Redis behind `RateLimiter` if you run several instances.
 - Secret rotation: rotating `JWT_SECRET` invalidates all access tokens of this deployment only.
 - Database TLS (`sslmode=require`) and least-privilege roles.
+- Pruning: schedule `npm run db:prune` (from a source checkout of the release tag, like the tenant CLI) per
+  deployment database, e.g. daily; `DEPLOYMENT_MODE=dedicated` also needs `DEDICATED_TENANT_SLUG` set.
+  What it deletes: [deployment-shared.md](./deployment-shared.md#pruning-auth-data-npm-run-dbprune).
 - Suspension: `npm run tenant -- set-status --slug acme --status SUSPENDED` takes effect within 30 s (403
   `TENANT_SUSPENDED`).
+- The console mailer logs live reset links whenever `NODE_ENV` is not `production` (staging included);
+  set `NODE_ENV=production` on any deployment with real users.
 - Before adding a real mail provider (async sending, console mailer suppresses links in production):
   [deployment-shared.md](./deployment-shared.md#before-adding-a-real-mail-provider).

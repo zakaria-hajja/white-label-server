@@ -14,6 +14,8 @@ export type NewUser = {
   lastName: string | null;
 };
 
+export type UserCredentials = Pick<User, "status" | "passwordHash" | "passwordChangedAt">;
+
 export type SessionMeta = { userAgent: string | null; ip: string | null };
 
 export type RefreshTokenWithSession = { token: RefreshToken; session: Session };
@@ -30,20 +32,37 @@ export interface AuthRepository {
     lockUntil: Date,
   ): Promise<number>;
   resetFailedLogins(tenantId: string, userId: string): Promise<void>;
+  /**
+   * Reads the user's credential state and locks the row until the transaction ends
+   * (`SELECT ... FOR UPDATE`), so a concurrent password reset waits for, or is seen by, the caller.
+   * Only meaningful inside `transaction()`.
+   */
+  lockUserCredentials(tenantId: string, userId: string): Promise<UserCredentials | null>;
   createSession(
     tenantId: string,
     userId: string,
     meta: SessionMeta,
     expiresAt: Date,
   ): Promise<Session>;
-  createRefreshToken(sessionId: string, tokenHash: string, expiresAt: Date): Promise<void>;
+  /** Returns the new token's id. */
+  createRefreshToken(sessionId: string, tokenHash: string, expiresAt: Date): Promise<string>;
   /**
    * RefreshToken has no tenantId column: it is tenant-owned through its Session, so callers must
    * check `session.tenantId` against the request tenant.
    */
   findRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenWithSession | null>;
-  /** Atomically marks the token used. Returns false when it was already used (lost the race). */
+  /**
+   * Atomically marks the token used if it is neither used nor superseded. Returns false when it
+   * lost (already used or superseded).
+   */
   claimRefreshToken(id: string, now: Date): Promise<boolean>;
+  /**
+   * Atomically marks an unused, unsuperseded token superseded. Returns false when it lost (the
+   * token was used or superseded meanwhile).
+   */
+  supersedeRefreshToken(id: string, now: Date): Promise<boolean>;
+  /** Records the token issued in exchange for `id`. */
+  setRefreshTokenReplacement(id: string, replacedById: string): Promise<void>;
   touchSession(tenantId: string, sessionId: string, now: Date): Promise<void>;
   /** Idempotent: an already revoked session keeps its original revokedAt and reason. */
   revokeSession(tenantId: string, sessionId: string, reason: string, now: Date): Promise<void>;
@@ -122,6 +141,15 @@ export class PrismaAuthRepository implements AuthRepository {
     });
   }
 
+  async lockUserCredentials(tenantId: string, userId: string): Promise<UserCredentials | null> {
+    const rows = await this.db.$queryRaw<
+      { status: User["status"]; passwordHash: string; passwordChangedAt: Date }[]
+    >`SELECT status::text AS "status", password_hash AS "passwordHash",
+             password_changed_at AS "passwordChangedAt"
+        FROM users WHERE tenant_id = ${tenantId}::uuid AND id = ${userId}::uuid FOR UPDATE`;
+    return rows[0] ?? null;
+  }
+
   createSession(
     tenantId: string,
     userId: string,
@@ -133,8 +161,12 @@ export class PrismaAuthRepository implements AuthRepository {
     });
   }
 
-  async createRefreshToken(sessionId: string, tokenHash: string, expiresAt: Date): Promise<void> {
-    await this.db.refreshToken.create({ data: { sessionId, tokenHash, expiresAt } });
+  async createRefreshToken(sessionId: string, tokenHash: string, expiresAt: Date): Promise<string> {
+    const { id } = await this.db.refreshToken.create({
+      data: { sessionId, tokenHash, expiresAt },
+      select: { id: true },
+    });
+    return id;
   }
 
   findRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenWithSession | null> {
@@ -149,10 +181,22 @@ export class PrismaAuthRepository implements AuthRepository {
 
   async claimRefreshToken(id: string, now: Date): Promise<boolean> {
     const { count } = await this.db.refreshToken.updateMany({
-      where: { id, usedAt: null },
+      where: { id, usedAt: null, supersededAt: null },
       data: { usedAt: now },
     });
     return count === 1;
+  }
+
+  async supersedeRefreshToken(id: string, now: Date): Promise<boolean> {
+    const { count } = await this.db.refreshToken.updateMany({
+      where: { id, usedAt: null, supersededAt: null },
+      data: { supersededAt: now },
+    });
+    return count === 1;
+  }
+
+  async setRefreshTokenReplacement(id: string, replacedById: string): Promise<void> {
+    await this.db.refreshToken.update({ where: { id }, data: { replacedById } });
   }
 
   async touchSession(tenantId: string, sessionId: string, now: Date): Promise<void> {

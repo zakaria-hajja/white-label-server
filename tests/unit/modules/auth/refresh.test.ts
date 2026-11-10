@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDeps } from "../../../helpers/fakes/reset-deps";
 import { FakeAuthRepository } from "../../../helpers/fakes/auth-repository.fake";
 import { verifyAccessToken } from "@/core/auth/jwt";
+import { hashToken } from "@/core/auth/tokens";
 import type { TenantContext } from "@/core/tenant/tenant-context";
 import { AuthService } from "@/modules/auth/auth.service";
 
@@ -46,7 +47,7 @@ beforeEach(async () => {
 });
 
 describe("AuthService.refresh", () => {
-  it("returns a new pair with the same sid, marks the old token used, new token works once", async () => {
+  it("returns a new pair with the same sid, marks the old token used, new token works", async () => {
     advance(60_000);
     const pair = await service.refresh(A, first);
     expect(pair.refreshToken).not.toBe(first);
@@ -58,6 +59,8 @@ describe("AuthService.refresh", () => {
     // New token keeps the session's absolute expiry.
     expect(repo.refreshTokens[1]?.expiresAt).toEqual(repo.sessions[0]?.expiresAt);
     await service.refresh(A, pair.refreshToken);
+    // Within 10 s a second use is a lost-response retry (see below); after that it is reuse.
+    advance(10_000);
     await expect(service.refresh(A, pair.refreshToken)).rejects.toMatchObject({
       code: "INVALID_REFRESH_TOKEN",
     });
@@ -69,14 +72,78 @@ describe("AuthService.refresh", () => {
     });
   });
 
-  it("reuse within 10 s is rejected but keeps the session and the new token", async () => {
+  it("lost response: a retry within 10 s gets a fresh pair; the lost successor fails without revoking", async () => {
+    const lost = await service.refresh(A, first); // the client never receives this pair
+    advance(5_000);
+    const retry = await service.refresh(A, first);
+    expect(retry.refreshToken).not.toBe(lost.refreshToken);
+    const sid = (await verifyAccessToken(cfg.jwt, retry.accessToken, now)).sid;
+    expect(sid).toBe(repo.sessions[0]?.id);
+    // The lost successor is superseded: rejected, and the session survives.
+    await expect(service.refresh(A, lost.refreshToken)).rejects.toMatchObject({
+      code: "INVALID_REFRESH_TOKEN",
+    });
+    expect(repo.sessions[0]?.revokedAt).toBeNull();
+    await expect(service.refresh(A, retry.refreshToken)).resolves.toBeDefined();
+  });
+
+  it("a retry within 10 s after the successor was already used is rejected, session kept", async () => {
     const pair = await service.refresh(A, first);
+    const next = await service.refresh(A, pair.refreshToken);
     advance(5_000);
     await expect(service.refresh(A, first)).rejects.toMatchObject({
       code: "INVALID_REFRESH_TOKEN",
     });
     expect(repo.sessions[0]?.revokedAt).toBeNull();
-    await expect(service.refresh(A, pair.refreshToken)).resolves.toBeDefined();
+    await expect(service.refresh(A, next.refreshToken)).resolves.toBeDefined();
+  });
+
+  it("presenting a superseded token is rejected and never revokes, even after the grace window", async () => {
+    const lost = await service.refresh(A, first);
+    const retry = await service.refresh(A, first);
+    advance(60_000);
+    await expect(service.refresh(A, lost.refreshToken)).rejects.toMatchObject({
+      code: "INVALID_REFRESH_TOKEN",
+    });
+    expect(repo.sessions[0]?.revokedAt).toBeNull();
+    await expect(service.refresh(A, retry.refreshToken)).resolves.toBeDefined();
+  });
+
+  it("a retry after the grace window revokes the session even if the successor is unused", async () => {
+    const lost = await service.refresh(A, first);
+    advance(10_000);
+    await expect(service.refresh(A, first)).rejects.toMatchObject({
+      code: "INVALID_REFRESH_TOKEN",
+    });
+    expect(repo.sessions[0]?.revokedReason).toBe("refresh_token_reuse");
+    await expect(service.refresh(A, lost.refreshToken)).rejects.toMatchObject({
+      code: "INVALID_REFRESH_TOKEN",
+    });
+  });
+
+  it("losing the supersede race falls back to 401 without revoking", async () => {
+    await service.refresh(A, first);
+    // Simulate a concurrent retry that superseded the successor between our read and our update.
+    const orig = repo.supersedeRefreshToken.bind(repo);
+    repo.supersedeRefreshToken = async (id, at) => {
+      await orig(id, at);
+      return orig(id, at);
+    };
+    await expect(service.refresh(A, first)).rejects.toMatchObject({
+      code: "INVALID_REFRESH_TOKEN",
+    });
+    expect(repo.sessions[0]?.revokedAt).toBeNull();
+  });
+
+  it("links each claimed token to its successor", async () => {
+    const pair = await service.refresh(A, first);
+    const [t0, t1] = repo.refreshTokens;
+    expect(t0?.replacedById).toBe(t1?.id);
+    const retry = await service.refresh(A, first);
+    const t2 = repo.refreshTokens[2];
+    expect(t0?.replacedById).toBe(t2?.id);
+    expect(t1?.supersededAt).toEqual(now);
+    expect(retry.refreshToken).not.toBe(pair.refreshToken);
   });
 
   it("reuse after 10 s revokes the session (refresh_token_reuse)", async () => {
@@ -120,6 +187,75 @@ describe("AuthService.refresh", () => {
     await expect(service.refresh(A, first)).rejects.toMatchObject({
       code: "INVALID_REFRESH_TOKEN",
     });
+  });
+});
+
+describe("refresh rotation invariant (randomised sequences)", () => {
+  const GRACE = 10_000;
+  // Deterministic PRNG so failures reproduce.
+  const rng = (seed: number) => () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+
+  it("at most one live token; the last pair works; superseded tokens fail; no revoke within grace", async () => {
+    for (let run = 0; run < 150; run++) {
+      const rand = rng(run + 1);
+      now = new Date("2026-01-01T00:00:00Z");
+      repo = new FakeAuthRepository(clock.now);
+      service = new AuthService(repo, cfg, clock, resetDeps);
+      const reg = await service.register(A, { email: "a@b.co", password: "correct-horse-1" }, META);
+      const issued = [reg.tokens.refreshToken];
+      let last = reg.tokens.refreshToken;
+      const session = repo.sessions[0]!;
+      const byHash = async (raw: string) =>
+        (await repo.findRefreshTokenByHash(hashToken(raw)))!.token;
+      const live = () =>
+        repo.refreshTokens.filter(
+          (t) => t.sessionId === session.id && t.usedAt === null && t.supersededAt === null,
+        );
+
+      for (let step = 0; step < 25 && session.revokedAt === null; step++) {
+        advance(Math.floor(rand() * 6_000));
+        // Mostly recent tokens (retries and normal use), sometimes old ones (replays).
+        const idx = Math.max(0, issued.length - 1 - Math.floor(rand() * rand() * issued.length));
+        const raw = issued[idx]!;
+        const before = { ...(await byHash(raw)) };
+        let result: Awaited<ReturnType<AuthService["refresh"]>> | null = null;
+        try {
+          result = await service.refresh(A, raw);
+        } catch (e) {
+          expect(e).toMatchObject({ code: "INVALID_REFRESH_TOKEN" });
+        }
+        if (before.supersededAt !== null) expect(result).toBeNull();
+        if (session.revokedAt !== null) {
+          // Only a used (not superseded) token replayed after the grace window may revoke.
+          expect(before.supersededAt).toBeNull();
+          expect(before.usedAt).not.toBeNull();
+          expect(now.getTime() - before.usedAt!.getTime()).toBeGreaterThanOrEqual(GRACE);
+          expect(live()).toHaveLength(1); // revocation kills the session, not the row
+          break;
+        }
+        if (result) {
+          issued.push(result.refreshToken);
+          last = result.refreshToken;
+        }
+        const l = live();
+        expect(l).toHaveLength(1);
+        expect(l[0]?.id).toBe((await byHash(last)).id);
+      }
+      if (session.revokedAt === null) {
+        // Every superseded token fails without revoking; the last pair handed out still works.
+        for (const raw of issued) {
+          if ((await byHash(raw)).supersededAt === null) continue;
+          await expect(service.refresh(A, raw)).rejects.toMatchObject({
+            code: "INVALID_REFRESH_TOKEN",
+          });
+        }
+        expect(session.revokedAt).toBeNull();
+        await expect(service.refresh(A, last)).resolves.toBeDefined();
+      }
+    }
   });
 });
 
