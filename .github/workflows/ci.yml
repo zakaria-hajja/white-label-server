@@ -69,6 +69,26 @@ jobs:
       - name: OpenAPI contract is up to date
         run: npm run openapi:generate && git diff --exit-code openapi/
 
+      # Compares this PR's contract with the one on the branch it merges into. Docker actions only
+      # see the workspace, so the base copy is written there (git-ignored), not to /tmp.
+      - name: Base branch OpenAPI contract
+        id: base-spec
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: scripts/base-openapi.sh "origin/$BASE_REF" .oasdiff-base.json
+
+      - name: No breaking API changes
+        if: github.event_name == 'pull_request' && steps.base-spec.outputs.skip != 'true'
+        uses: oasdiff/oasdiff-action/breaking@9ce3a29eb0e6478dd0140932a678c7fb59d08f22 # v0.1.20 (oasdiff v1.34.1)
+        with:
+          base: .oasdiff-base.json
+          revision: openapi/openapi.json
+          fail-on: ERR
+          # Private repo: never upload the specs to oasdiff.com, and don't comment on the PR.
+          review: "false"
+          github-token: ""
+
       - run: npm run openapi:lint
       - run: npm run build
 

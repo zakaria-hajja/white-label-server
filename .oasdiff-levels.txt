@@ -1,0 +1,5 @@
+response-property-enum-value-removed ERR
+response-mediatype-enum-value-removed ERR
+response-non-success-status-removed ERR
+optional-response-header-removed ERR
+api-operation-id-removed ERR

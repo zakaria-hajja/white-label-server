@@ -1,0 +1,4 @@
+# oasdiff config, picked up from the repo root by the CI breaking-change step (and local runs).
+# docs/contract.md treats some changes as breaking that oasdiff rates INFO by default; the levels
+# file raises them to ERR so `fail-on: ERR` catches them.
+severity-levels: .oasdiff-levels.txt

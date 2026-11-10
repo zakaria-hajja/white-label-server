@@ -8,3 +8,4 @@ src/generated/
 *.tsbuildinfo
 next-env.d.ts
 AGENTS.md
+.oasdiff-base.json
