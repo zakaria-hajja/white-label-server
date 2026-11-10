@@ -31,6 +31,7 @@ const cfg = {
 
 let authRepo: FakeAuthRepository;
 let service: UsersService;
+let usersRepo: FakeUsersRepository;
 let auth: { userId: string; tenantId: string; sessionId: string };
 
 async function rejects(p: Promise<unknown>, code: string) {
@@ -53,7 +54,8 @@ beforeEach(async () => {
   const user = authRepo.users[0]!;
   const session = authRepo.sessions[0]!;
   auth = { userId: user.id, tenantId: A.tenantId, sessionId: session.id };
-  service = new UsersService(new FakeUsersRepository(authRepo), clock);
+  usersRepo = new FakeUsersRepository(authRepo);
+  service = new UsersService(usersRepo, clock);
 });
 
 describe("schemas", () => {
@@ -163,11 +165,13 @@ describe("deleteMe", () => {
     expect(deleteMeBody.safeParse({ password: "x", userId: "u" }).success).toBe(false);
   });
 
-  it("a wrong password -> INVALID_CREDENTIALS and nothing is deleted", async () => {
+  it("a wrong password -> INVALID_CREDENTIALS and the delete is never attempted", async () => {
+    const spy = vi.spyOn(usersRepo, "deleteUser");
     await rejects(
       service.deleteMe(A, auth, { password: "wrong-password-1" }),
       "INVALID_CREDENTIALS",
     );
+    expect(spy).not.toHaveBeenCalled();
     expect(authRepo.users).toHaveLength(1);
   });
 
@@ -183,11 +187,13 @@ describe("deleteMe", () => {
     expect(authRepo.users).toHaveLength(0);
   });
 
-  it("a user of another tenant is NOT_FOUND and nothing is deleted", async () => {
+  it("a user of another tenant is NOT_FOUND and the delete is never attempted", async () => {
+    const spy = vi.spyOn(usersRepo, "deleteUser");
     await rejects(
       service.deleteMe(B, { ...auth, tenantId: B.tenantId }, { password: OLD }),
       "NOT_FOUND",
     );
+    expect(spy).not.toHaveBeenCalled();
     expect(authRepo.users).toHaveLength(1);
   });
 
