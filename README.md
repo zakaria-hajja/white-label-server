@@ -1,12 +1,19 @@
-# Whitelabel Backend API
+# Backend API starter
 
-A multi-tenant REST API (Next.js 16, TypeScript, Prisma 7, PostgreSQL) for white-label Android apps. Each
-brand's app gets its own users, catalog, settings and runtime config from the same code base; the API
-contract is the committed [`openapi/openapi.json`](./openapi/openapi.json).
+The backend starter each app's backend is created from (Next.js 16, TypeScript, Prisma 7, PostgreSQL).
+Every app built from `android-starter-kit` gets its own backend: a repo cloned from this one that keeps
+a `starter` remote and merges starter tags ([docs/creating-a-backend.md](./docs/creating-a-backend.md)).
 
-**Shared mode:** one deployment and one database serve many tenants; each request names its tenant with
-the `X-Client-Id` header. **Dedicated mode:** one deployment (own database, secret and domain) serves a
-single tenant fixed by `DEDICATED_TENANT_SLUG`. The same Docker image runs both; `DEPLOYMENT_MODE` selects.
+Its API is the contract the shared Android features (auth, home, catalog, profile, settings) call
+directly. The contract is the committed [`openapi/openapi.json`](./openapi/openapi.json), and `/api/v1`
+only ever grows: see [docs/contract.md](./docs/contract.md).
+
+The same Docker image runs in two modes, selected by `DEPLOYMENT_MODE`:
+
+- **Dedicated** (the normal production shape): one deployment, with its own database, secret and domain,
+  serves a single tenant fixed by `DEDICATED_TENANT_SLUG`.
+- **Shared**: one deployment and one database serve many tenants; each request names its tenant with
+  the `X-Client-Id` header. Used for local development and for hosting several small apps cheaply.
 
 ## Quickstart
 
@@ -36,6 +43,8 @@ Seeded tenants are `acme` and `globex`; each has users `alice@shared.test` and `
 
 | Doc | Contents |
 | --- | --- |
+| [docs/creating-a-backend.md](./docs/creating-a-backend.md) | Creating an app's backend from this starter, lining it up with the Android app, pulling starter updates |
+| [docs/contract.md](./docs/contract.md) | What the API contract is, what may change in v1, tags, the `x/` app namespace, flag keys, CI guards |
 | [docs/architecture.md](./docs/architecture.md) | Overview, folder structure, module boundaries, data model, tenant resolution, authentication, security notes, RLS plan |
 | [docs/api.md](./docs/api.md) | Envelope, endpoints, `X-Client-Id` rules, token lifecycle, Android guidance, error codes, consuming the OpenAPI spec |
 | [docs/environment.md](./docs/environment.md) | Every environment variable |
