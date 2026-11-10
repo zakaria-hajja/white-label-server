@@ -23,7 +23,7 @@ tests/integration/<name>/<name>.dedicated.test.ts  dedicated-mode project (tenan
 Naming convention: any `*.test.ts` under `tests/integration` runs in the shared project;
 `*.dedicated.test.ts` runs in the dedicated project (`DEDICATED_TENANT_SLUG=acme`).
 
-OpenAPI registration: see Task 17 / docs once available.
+OpenAPI registration: see the [OpenAPI](#openapi) section.
 
 ## Schemas
 
@@ -130,6 +130,48 @@ Throw `AppError(code)` with a code from `src/core/errors/codes.ts`; never build 
 hand. Zod failures become 400 `VALIDATION_ERROR` automatically. Use `NOT_FOUND` for missing or
 foreign rows, `FEATURE_DISABLED` for gated modules. Anything else is a 500 with a generic message.
 Add a new code to `ERROR_STATUS` only if no existing one fits.
+
+## OpenAPI
+
+The Android apps generate their client from the committed `openapi/openapi.json`, so every route must
+be in it. Nothing is written by hand: the spec is built from the Zod schemas the routes use.
+
+1. **Response schema** next to the DTO: `<x>.dto.ts` exports `XDtoSchema` (Zod) and
+   `export type XDto = z.infer<typeof XDtoSchema>`. Dates are `z.iso.datetime()`.
+2. **`src/modules/<x>/<x>.openapi.ts`**: register the DTO and envelopes, then each operation.
+
+```ts
+const Item = registry.register("CatalogItemDto", CatalogItemDtoSchema);
+
+registerOperation({
+  method: "get",
+  path: "/api/v1/catalog/{id}",
+  operationId: "catalogGet", // stable camelCase: the Android method name
+  tag: TAGS.catalog, // add a new tag to TAGS and TAG_DESCRIPTIONS
+  summary: "Get one catalog item",
+  auth: "required", // same values as in route.ts
+  tenant: "required",
+  params: zIdParams, // the SAME schema objects the route uses
+  success: [
+    { status: 200, description: "The item", schema: SuccessEnvelope("CatalogItemEnvelope", Item) },
+  ],
+});
+```
+
+Use `SuccessEnvelope(name, dataSchema)` for single values and `PaginatedEnvelope(name, itemSchema)`
+for lists. `tests/unit/openapi/contract.test.ts` requires `auth`, `tenant`, `body`, `query`,
+`params` and `rateLimit` to be identical to the route's (every `route()` handler carries a `.meta`
+copy of its config), so import the schema and rate-limit objects instead of redefining them. 3. **Error responses are derived**, not written: 500 always; 400 with a body, query, params or a
+required tenant; 401 with `auth: "required"`; 403 with a required tenant; 404 with `params`; 413
+with a body; 429 with `rateLimit` (plus `Retry-After`). If a handler can return another status
+(e.g. 409 `EMAIL_ALREADY_REGISTERED`, 404 `FEATURE_DISABLED`), list it in `extraErrors` **and** in
+`EXTRA_ERRORS` in the contract test. 4. Add `import "@/modules/<x>/<x>.openapi";` to `src/core/openapi/document.ts`. 5. Add a row to `tests/unit/openapi/dto-contract.test.ts`: run the real mapper/service output through
+`ok()` and parse it with your envelope, so the spec cannot drift from the DTO. 6. `npm run openapi:generate`, then `npm run openapi:lint`; commit the regenerated
+`openapi/openapi.json` (CI fails on a diff; a unit test fails when it is stale).
+
+Gotcha: Zod 4 schemas created before `extendZodWithOpenApi()` lack `.openapi()`. The registry module
+runs it, so a `*.openapi.ts` file must import `@/core/openapi/registry` (or `components`) before
+anything that builds schemas, and tests that import schemas first must import the registry first.
 
 ## Tests to copy
 

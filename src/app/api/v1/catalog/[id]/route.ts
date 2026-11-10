@@ -1,5 +1,5 @@
-import { z } from "zod";
 import { route } from "@/core/http/route";
+import { zIdParams } from "@/core/validation/common";
 import { getCatalogItemHandler } from "@/modules/catalog/catalog.handlers";
 
 export const runtime = "nodejs";
@@ -7,6 +7,6 @@ export const runtime = "nodejs";
 export const GET = route({
   auth: "required",
   tenant: "required",
-  params: z.object({ id: z.string() }),
+  params: zIdParams,
   handler: getCatalogItemHandler,
 });

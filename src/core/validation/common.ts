@@ -12,3 +12,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** For path ids: a malformed id is "not found" (404), so check this instead of validating with zUuid. */
 export const isUuid = (v: string): boolean => UUID_RE.test(v);
+
+/** Path params of `/{id}` routes. Malformed ids are a 404 (see `isUuid`), so this stays a plain string. */
+export const zIdParams = z.object({ id: z.string().describe("UUID of the resource") });

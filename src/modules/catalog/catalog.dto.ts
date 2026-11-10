@@ -1,12 +1,16 @@
-export type CatalogItemDto = {
-  id: string;
-  title: string;
-  description: string | null;
-  category: string | null;
-  imageUrl: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+import { z } from "zod";
+
+export const CatalogItemDtoSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  description: z.string().nullable(),
+  category: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+
+export type CatalogItemDto = z.infer<typeof CatalogItemDtoSchema>;
 
 type CatalogItemLike = {
   id: string;

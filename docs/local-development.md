@@ -102,8 +102,8 @@ a human in their own terminal. It drops and re-migrates both test databases.
 
 ## Other scripts
 
-`openapi:generate` and `openapi:lint` are declared in `package.json` but their target files are not
-implemented yet; they arrive in later phases.
+`npm run openapi:generate` rewrites `openapi/openapi.json` from the Zod schemas; `npm run openapi:lint`
+runs Redocly on it. See the OpenAPI section of [adding-a-module.md](adding-a-module.md).
 
 ## Managing tenants
 

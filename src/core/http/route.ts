@@ -54,6 +54,14 @@ export type RouteHandler = (
   ctx: { params: Promise<Record<string, string>> },
 ) => Promise<Response>;
 
+/** Static description of a route, attached to the handler so the OpenAPI contract test can check it. */
+export type RouteMeta = Pick<
+  RouteDef<unknown, unknown, unknown>,
+  "auth" | "tenant" | "body" | "query" | "params" | "rateLimit"
+>;
+
+export type DescribedRouteHandler = RouteHandler & { meta: RouteMeta };
+
 // Used only when the container (and so its logger) cannot be built.
 const fallbackLogger = createLogger("info").child({ component: "route-fallback" });
 
@@ -65,12 +73,12 @@ export function route<
   P = undefined,
   T extends TenantMode = TenantMode,
   A extends AuthMode = AuthMode,
->(def: RouteDef<B, Q, P, T, A>): RouteHandler {
+>(def: RouteDef<B, Q, P, T, A>): DescribedRouteHandler {
   if (def.auth === "required" && def.tenant !== "required") {
     throw new Error('route(): auth "required" needs tenant "required"');
   }
 
-  return async (req, ctx) => {
+  const handler: RouteHandler = async (req, ctx) => {
     const started = performance.now();
     const requestId = resolveRequestId(req);
     let logger: Logger = fallbackLogger;
@@ -151,6 +159,15 @@ export function route<
     );
     return response;
   };
+  const meta: RouteMeta = {
+    auth: def.auth,
+    tenant: def.tenant,
+    body: def.body,
+    query: def.query,
+    params: def.params,
+    rateLimit: def.rateLimit,
+  };
+  return Object.assign(handler, { meta });
 }
 
 function extractBearer(header: string | null): string {

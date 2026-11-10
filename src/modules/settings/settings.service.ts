@@ -6,15 +6,9 @@ import type { SettingsRepository } from "./settings.repository";
 import {
   NotificationsSchema,
   ThemeSchema,
-  type Notifications,
+  type SettingsDto,
   type UpdateSettingsInput,
 } from "./settings.schemas";
-
-export type SettingsDto = {
-  theme: "SYSTEM" | "LIGHT" | "DARK";
-  language: string;
-  notifications: Notifications;
-};
 
 export class SettingsService {
   constructor(
