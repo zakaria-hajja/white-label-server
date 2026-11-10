@@ -75,7 +75,15 @@ Login and register return `tokens: {accessToken, refreshToken, tokenType: "Beare
   was used less than 10 s ago this is treated as a benign retry or race and the session survives (the client
   that got the new pair keeps working). After 10 s it is treated as theft and the whole session is revoked.
   Therefore the Android client must **single-flight refresh**: only one refresh in flight at a time, with
-  every concurrent 401 waiting on that one result, and the new refresh token persisted before it is used.
+  every concurrent 401 waiting on that one result.
+- **Lost refresh responses.** The server stores only token hashes, so it cannot resend a pair it already
+  issued. If a refresh succeeded on the server but the response never reached the app (timeout, dropped
+  connection, process death), retrying with the old token within 10 s returns 401 `INVALID_REFRESH_TOKEN`
+  while the session survives, and the app no longer holds a usable token. Retrying after 10 s revokes the
+  whole session. The accepted cost: the user signs in again. Clients should therefore (a) persist the new
+  pair atomically before using it, (b) never retry a refresh with a token already known to be accepted,
+  (c) after an ambiguous failure make at most one retry with the old token and, if that returns
+  `INVALID_REFRESH_TOKEN`, send the user to sign in, and (d) never retry with the old token after 10 s.
 - Password reset links are valid `PASSWORD_RESET_TTL_MINUTES` (default 30), single use, and revoke all
   sessions.
 - Repeated failed logins lock the account for 15 minutes after 10 failures; the response stays
@@ -90,7 +98,8 @@ Login and register return `tokens: {accessToken, refreshToken, tokenType: "Beare
    still fails with 401, sign out.
 4. On 401 `UNAUTHENTICATED` for a request that had a token: the session was revoked or the user disabled;
    try one refresh, and if that fails, sign out.
-5. On 401 `INVALID_REFRESH_TOKEN`: sign out and show the login screen. Do not retry.
+5. On 401 `INVALID_REFRESH_TOKEN`: sign out and show the login screen. Do not retry. (This includes the
+   lost-response case described under Token lifecycle: the user must sign in again.)
 6. On 429 `RATE_LIMITED`: read the `Retry-After` header (seconds), wait at least that long, and do not
    auto-retry in a tight loop. Back off on 5xx as well.
 7. Branch on `error.code`; show your own localised text rather than `error.message`.

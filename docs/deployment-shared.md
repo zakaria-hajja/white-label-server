@@ -43,11 +43,17 @@ Both run as the non-root `node` user; the runtime image listens on port 3000 and
 
 ## Onboarding a tenant
 
-There is no admin API; tenants are managed with the operator CLI against the production database
-(set `DATABASE_URL` to the **owner** or another role allowed to write, plus `DEPLOYMENT_MODE=shared` and
-`JWT_SECRET`, which the CLI's config loader requires):
+There is no admin API; tenants are managed with the operator CLI. **The CLI is not in the runtime or
+migrator images** (they contain no `scripts/`, `src/` or `tsx`). Run it from a source checkout of the same
+release tag, on a trusted admin machine or a one-off job, with `DATABASE_URL` pointing at the target
+database over TLS (`sslmode=require`) using a role that may write the tenant tables. It also requires
+`DEPLOYMENT_MODE` and `JWT_SECRET` (the config loader validates them; the value is not used by the CLI).
+No `.env` file is needed if you export the variables:
 
 ```bash
+git checkout <release-tag> && npm ci
+export DEPLOYMENT_MODE=shared JWT_SECRET=<any 32+ char value> \
+  DATABASE_URL='postgresql://APP_USER:PASSWORD@HOST:5432/whitelabel?sslmode=require'
 npm run tenant -- create --slug acme --name "Acme" --config acme-config.json
 npm run tenant -- set-feature --slug acme --key catalog --enabled true
 npm run tenant -- list
@@ -93,20 +99,35 @@ Limits live in memory in each instance, so with N instances the effective limit 
 ## Database
 
 - **TLS:** use `?sslmode=require` in `DATABASE_URL` for any non-local database.
-- **Least privilege:** use two roles. The migration owner role owns the schema and is used only by the
-  migrator. The application role is not a superuser, does not own the tables, and has only
-  `SELECT, INSERT, UPDATE, DELETE` on the tables and `USAGE` on the schema (plus default privileges for
-  future migrations). Example:
+- **Least privilege:** use two roles. `whitelabel_owner` owns the database and schema objects and is used
+  **only by the migrator** (`DATABASE_URL` of the migrator job). `whitelabel_app` is not a superuser, owns
+  nothing, and has only `SELECT, INSERT, UPDATE, DELETE`; it is the `DATABASE_URL` of the app instances.
+  Run as a superuser (or an admin role) on a fresh database, before the first migration (tested on
+  Postgres 17):
 
   ```sql
-  CREATE ROLE whitelabel_app LOGIN PASSWORD '...' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+  CREATE ROLE whitelabel_owner LOGIN PASSWORD '<owner password>' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+  CREATE ROLE whitelabel_app   LOGIN PASSWORD '<app password>'   NOSUPERUSER NOCREATEDB NOCREATEROLE;
+  CREATE DATABASE whitelabel OWNER whitelabel_owner;
+  REVOKE ALL ON DATABASE whitelabel FROM PUBLIC;
   GRANT CONNECT ON DATABASE whitelabel TO whitelabel_app;
+
+  \connect whitelabel
+  -- PostgreSQL 15+ no longer lets PUBLIC (or non-owners) create in schema public
+  GRANT USAGE, CREATE ON SCHEMA public TO whitelabel_owner;
   GRANT USAGE ON SCHEMA public TO whitelabel_app;
+  -- tables the owner creates in future migrations (run by the owner or a superuser)
   ALTER DEFAULT PRIVILEGES FOR ROLE whitelabel_owner IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO whitelabel_app;
+  -- tables that already exist (a no-op on a fresh database)
+  GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO whitelabel_app;
   ```
 
-  (Run the `ALTER DEFAULT PRIVILEGES` before the first migration, or grant on existing tables once.)
+  Then run the migrator with the owner URL (`postgresql://whitelabel_owner:...@HOST:5432/whitelabel?sslmode=require`)
+  and start the app with the app URL. Verified: as `whitelabel_app`, `SELECT` and `INSERT` on `tenants`
+  work, while `DROP TABLE tenants` fails ("must be owner of table") and `CREATE TABLE` fails ("permission
+  denied for schema public"). Tenant CLI writes need the app role or the owner. The test suites truncate
+  tables, so they use their own superuser-owned test databases, not these roles.
 - Back up the database; there is no application-level export.
 
 ## Before adding a real mail provider

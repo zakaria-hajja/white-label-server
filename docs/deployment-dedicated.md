@@ -22,18 +22,22 @@ another tenant is rejected with 401 `UNAUTHENTICATED`.
 
 ## Provisioning a new deployment
 
-1. Create an empty database (and the two roles described in
-   [deployment-shared.md](./deployment-shared.md#database)) and a unique `JWT_SECRET`.
+1. Create an empty database (with the two roles from the
+   [least-privilege recipe](./deployment-shared.md#database), substituting this deployment's database name) and a unique `JWT_SECRET`.
 2. Build the images (`docker build -t whitelabel-api .` and
    `docker build --target migrator -t whitelabel-api-migrator .`) and run the migrator against the new
    database: `docker run --rm -e DATABASE_URL=<owner-role URL> whitelabel-api-migrator`.
-3. Create the single tenant with the CLI, using the **same slug** as `DEDICATED_TENANT_SLUG`. The CLI reads
-   the same environment as the server, so run it with the deployment's variables (including
-   `DEDICATED_TENANT_SLUG`, which is required in dedicated mode):
+3. Create the single tenant with the CLI, using the **same slug** as `DEDICATED_TENANT_SLUG`. The CLI is not
+   in the images: run it from a source checkout of the same release tag (`git checkout <tag> && npm ci`) on
+   a trusted admin machine or one-off job, with the deployment's variables exported (it requires
+   `DEPLOYMENT_MODE`, `JWT_SECRET` and, in dedicated mode, `DEDICATED_TENANT_SLUG`) and a TLS
+   `DATABASE_URL`; details in [deployment-shared.md](./deployment-shared.md#onboarding-a-tenant):
 
    ```bash
-   DEPLOYMENT_MODE=dedicated DEDICATED_TENANT_SLUG=acme DATABASE_URL=... JWT_SECRET=... \
-     npm run tenant -- create --slug acme --name "Acme" --config acme-config.json
+   git checkout <release-tag> && npm ci
+   export DEPLOYMENT_MODE=dedicated DEDICATED_TENANT_SLUG=acme JWT_SECRET=<the deployment secret> \
+     DATABASE_URL='postgresql://APP_USER:PASSWORD@HOST:5432/whitelabel_acme?sslmode=require'
+   npm run tenant -- create --slug acme --name "Acme" --config acme-config.json
    ```
 
    Set the display name, support and legal links and `passwordReset.linkBaseUrl` in the config JSON (or

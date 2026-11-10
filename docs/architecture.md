@@ -340,6 +340,9 @@ no rate limit of their own.
 - IP-based limits only work with `TRUST_PROXY=true` behind a proxy that sets the client IP header;
   otherwise the IP is unknown and those rules are skipped (a warning is logged in production).
   Account-keyed rules still apply.
+- A refresh whose response is lost cannot be recovered: tokens are stored hashed, so the server cannot resend
+  the new pair, and the retry with the old token gets `INVALID_REFRESH_TOKEN` (the user signs in again;
+  after the 10 s grace the session is revoked). Accepted trade-off; see [api.md](./api.md#token-lifecycle).
 - Rate limits are in memory and per instance: with N instances the effective limit is up to N times
   higher. Account lockout is in the database and is not affected.
 - Forgot-password has a timing difference (an existing account does database writes and a mail send).
