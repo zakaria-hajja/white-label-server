@@ -1,7 +1,7 @@
 # Backend API starter
 
 The backend starter each app's backend is created from (Next.js 16, TypeScript, Prisma 7, PostgreSQL).
-Every app built from `android-starter-kit` gets its own backend: a repo cloned from this one that keeps
+Every app built from `whitelabel-app-kit` gets its own backend: a repo cloned from this one that keeps
 a `starter` remote and merges starter tags ([docs/creating-a-backend.md](./docs/creating-a-backend.md)).
 
 Its API is the contract the shared Android features (auth, home, catalog, profile, settings) call

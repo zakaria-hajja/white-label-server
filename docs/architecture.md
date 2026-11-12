@@ -32,7 +32,7 @@ flowchart LR
 
 ## Role of this repo
 
-This repo is **the backend starter**. Each app built from `android-starter-kit` gets its own backend:
+This repo is **the backend starter**. Each app built from `whitelabel-app-kit` gets its own backend:
 a repo cloned from this one, which keeps a `starter` remote and pulls updates by merging starter tags
 ([creating-a-backend.md](./creating-a-backend.md)). The shared Android features call the starter's API
 directly, with no adapter layer, so that API is a shared dependency of every app and every backend made
@@ -47,7 +47,7 @@ flowchart LR
     S[backend-api<br/>the starter] -- "tag vX.Y.Z" --> A1[showcase-backend repo]
     S -- "tag vX.Y.Z" --> A2[globex-backend repo]
     A1 -- "git merge starter/vX.Y.Z" --> A1
-    S -- "openapi.json @ tag" --> AND[android-starter-kit<br/>shared features pin a tag]
+    S -- "openapi.json @ tag" --> AND[whitelabel-app-kit<br/>shared features pin a tag]
 ```
 
 ## Folder structure
