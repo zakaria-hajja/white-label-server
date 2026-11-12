@@ -1,8 +1,0 @@
-extends:
-  - recommended
-
-rules:
-  # Private API contract for first-party apps: no public license to declare.
-  info-license: off
-  # /health only has 2xx/5xx responses by design (no input to reject, no auth).
-  operation-4xx-response: off
