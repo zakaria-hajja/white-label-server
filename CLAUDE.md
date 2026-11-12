@@ -3,10 +3,10 @@
 ## Git workflow
 
 Applies to everyone working in this repo (the owner and Claude). Enforced by `.githooks/`
-(installed by `npm install`) and CI (`.github/workflows/ci.yml`, job `ci`). GitHub does
-**not** enforce anything: the repo is private on a free plan, so branch protection is
-unavailable. Merging only with a green `ci` check is a rule we keep, not one GitHub
-blocks. If the plan changes, run `scripts/github-protect.sh`.
+(installed by `npm install`) and CI (`.github/workflows/ci.yml`, job `ci`). The repo is public,
+so GitHub enforces branch protection on `main` too: changes land through a PR, the `ci` check
+must pass before merging (admins included), and force-pushes and deletion are blocked.
+`scripts/github-protect.sh` applies these settings; re-run it if they drift.
 Design: `docs/superpowers/specs/2026-11-09-git-workflow-design.md`.
 
 1. **Commits** — Conventional Commits: `type(scope): summary`.
