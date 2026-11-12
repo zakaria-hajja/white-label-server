@@ -1,6 +1,6 @@
 # Creating an app's backend
 
-Every app built from `android-starter-kit` gets its own backend, created from this repo (the
+Every app built from `whitelabel-app-kit` gets its own backend, created from this repo (the
 **starter**). The app's backend is a separate repo that keeps a `starter` git remote, so starter fixes
 and features arrive with a normal `git merge` of a starter tag. This guide is the counterpart of the
 Android repo's `docs/creating-an-app.md`. The rules for what the starter may change are in
