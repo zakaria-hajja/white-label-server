@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     env:
       # Throwaway CI-only literals; the integration projects set their own DATABASE_URL.
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/whitelabel_test_shared
