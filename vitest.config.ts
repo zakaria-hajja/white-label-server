@@ -12,6 +12,7 @@ export default defineConfig({
         test: {
           name: "unit",
           include: ["tests/unit/**/*.test.ts"],
+          setupFiles: ["tests/setup/git-env.ts"],
         },
       },
       {
